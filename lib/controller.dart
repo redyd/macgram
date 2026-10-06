@@ -236,6 +236,22 @@ class Controller extends ChangeNotifier {
     });
   }
 
+  /// Applies an automatic rearrangement as a single undo step. Break points
+  /// are dropped: they were placed for the old positions.
+  void applyLayout(Map<String, Pt> pos) => change(() {
+    for (final MapEntry(:key, :value) in pos.entries) {
+      if (doc.layout.containsKey(key)) doc.layout[key] = value;
+    }
+    for (final a in doc.associations) {
+      for (final l in a.legs) {
+        l.bends.clear();
+      }
+    }
+    for (final r in doc.arrows) {
+      r.bends.clear();
+    }
+  });
+
   /// Adds an enum (shown in the side panel) and returns its id.
   String addEnum() {
     final t = EnumType(id: newId('t'));

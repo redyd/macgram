@@ -338,6 +338,11 @@ class _HomeState extends State<Home> {
               ),
               const SizedBox(width: 8),
               _toggle('MLD', c.showMld, c.toggleMld),
+              _btn(
+                Icons.auto_fix_high,
+                'Réarranger (moins de croisements)',
+                () => showRearrangeDialog(context, c),
+              ),
               PopupMenuButton<String>(
                 tooltip: 'Exporter',
                 icon: const Icon(Icons.image_outlined),

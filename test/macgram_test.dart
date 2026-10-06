@@ -297,6 +297,21 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
     },
   );
 
+  test(
+    'applyLayout moves the boxes in one undo step and drops break points',
+    () {
+      final c = Controller()..doc = sample();
+      final leg = c.doc.associations.first.legs[0]..bends = [(5, 5)];
+      final before = c.doc.encode();
+      c.applyLayout({'e-cli': (300, 200), 'unknown': (1, 1)});
+      expect(c.doc.layout['e-cli'], (300, 200));
+      expect(c.doc.layout.containsKey('unknown'), isFalse);
+      expect(leg.bends, isEmpty);
+      c.undo();
+      expect(c.doc.encode(), before);
+    },
+  );
+
   Future<Controller> pumpApp(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -408,6 +423,58 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       expect(saved.entities.length, 1);
       expect(saved.enums.length, 1);
       expect(c.doc.entities, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'Réarranger: runs in an isolate behind a progress popup, then applies as one undo step',
+    (tester) async {
+      tester.view.physicalSize = const Size(1900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      // A ring of 6 entities, placed so that its links cross.
+      final c = Controller();
+      final ids = [for (var i = 0; i < 6; i++) 'e-$i'];
+      c.doc.entities.addAll([for (final id in ids) Entity(id: id, name: id)]);
+      for (var i = 0; i < 6; i++) {
+        c.doc.associations.add(
+          Association(
+            id: 'a-$i',
+            legs: [Leg(ids[i]), Leg(ids[(i * 2 + 1) % 6])],
+          ),
+        );
+        c.doc.layout[ids[i]] = (i.isEven ? 100 : 700, 100 + i * 90);
+        c.doc.layout['a-$i'] = (400, 100 + ((i * 5) % 6) * 90);
+      }
+      c.doc.prune();
+      final tangled = c.doc.encode();
+
+      await tester.pumpWidget(App(c));
+      await tester.tap(find.byTooltip('Réarranger (moins de croisements)'));
+      await tester.pump();
+      expect(find.text('Réarrangement du schéma'), findsOneWidget);
+      expect(
+        c.doc.encode(),
+        tangled,
+        reason: 'nothing changes while it computes',
+      );
+
+      for (
+        var i = 0;
+        i < 300 && find.text('Réarrangement du schéma').evaluate().isNotEmpty;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+      }
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Réarrangement du schéma'), findsNothing);
+      expect(find.textContaining('Schéma réarrangé'), findsOneWidget);
+      expect(c.doc.encode(), isNot(tangled));
+      c.undo();
+      expect(c.doc.encode(), tangled);
     },
   );
 }

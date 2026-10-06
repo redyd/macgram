@@ -1,8 +1,12 @@
+import 'dart:isolate';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'autolayout.dart';
 import 'controller.dart';
 import 'model.dart';
+import 'scene.dart';
 
 // Every form is a popup whose fields write straight into the document:
 // clicking outside (or Esc) closes it and nothing is lost.
@@ -22,6 +26,7 @@ const _help = '''
 
 • Attributs : Entrée ajoute une ligne, Tab passe du nom au type,
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.
+• Réarranger (baguette) : replace les boîtes pour limiter les croisements ; Ctrl+Z pour revenir.
 • Molette : zoom. Glisser le fond : déplacer la vue. Suppr : supprimer la sélection.''';
 
 const _dense = InputDecoration();
@@ -579,4 +584,121 @@ class _AttrRowState extends State<_AttrRow> {
       ),
     );
   }
+}
+
+/// Rearranges the diagram to minimise link crossings. The search runs in an
+/// isolate so the window stays responsive; cancelling changes nothing.
+Future<void> showRearrangeDialog(BuildContext context, Controller c) async {
+  // Box sizes come from the Merise scene, where every association has a box.
+  final boxes = <LBox>[
+    for (final (id, r) in buildScene(c.doc).hits)
+      if (c.doc.layout.containsKey(id))
+        (id: id, x: r.left, y: r.top, w: r.width, h: r.height),
+  ];
+  final edges = [
+    for (final a in c.doc.associations)
+      for (final l in a.legs) (a.id, l.entityId),
+    for (final r in c.doc.arrows) (r.from, r.to),
+  ];
+  if (boxes.length < 2) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final result = await showDialog<LayoutResult>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _RearrangeDialog(boxes, edges),
+  );
+  if (result == null) return;
+  if (result.improved) c.applyLayout(result.pos);
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        result.improved
+            ? 'Schéma réarrangé — croisements : ${result.before} → ${result.after}. Ctrl+Z pour revenir.'
+            : 'Aucun meilleur placement trouvé (croisements : ${result.before}).',
+      ),
+    ),
+  );
+}
+
+class _RearrangeDialog extends StatefulWidget {
+  final List<LBox> boxes;
+  final List<(String, String)> edges;
+  const _RearrangeDialog(this.boxes, this.edges);
+
+  @override
+  State<_RearrangeDialog> createState() => _RearrangeDialogState();
+}
+
+class _RearrangeDialogState extends State<_RearrangeDialog> {
+  final _port = ReceivePort();
+  Isolate? _isolate;
+  double _progress = 0;
+  int? _from, _best;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _port.listen((message) {
+      if (!mounted) return;
+      switch (message) {
+        case (final double p, final int crossings):
+          setState(() {
+            _progress = p;
+            _from ??= crossings;
+            _best = crossings;
+          });
+        case final LayoutResult result:
+          Navigator.pop(context, result);
+        default: // [error, stack] from the isolate's error port
+          setState(() => _error = '$message');
+      }
+    });
+    Isolate.spawn(layoutIsolate, (
+      _port.sendPort,
+      widget.boxes,
+      widget.edges,
+    ), onError: _port.sendPort).then((isolate) {
+      if (mounted) {
+        _isolate = isolate;
+      } else {
+        isolate.kill(priority: Isolate.immediate);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _isolate?.kill(priority: Isolate.immediate);
+    _port.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Réarrangement du schéma'),
+    content: SizedBox(
+      width: 360,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(value: _error == null ? _progress : 0),
+          _gap,
+          Text(
+            _error ??
+                (_best == null
+                    ? 'Recherche du meilleur placement…'
+                    : 'Croisements : $_from → $_best   (${(_progress * 100).round()} %)'),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(_error == null ? 'Annuler' : 'Fermer'),
+      ),
+    ],
+  );
 }
