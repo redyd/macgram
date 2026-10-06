@@ -105,6 +105,9 @@ class Label extends Shape {
 }
 
 class Scene {
+  final Palette pal;
+  Scene(this.pal);
+
   final shapes = <Shape>[];
 
   /// Clickable regions, later entries on top. Keys are item ids,
@@ -119,12 +122,27 @@ class Scene {
       hits.reversed.where((h) => h.$2.contains(p)).firstOrNull?.$1 ??
       segs.where((s) => _distance(p, s.$2, s.$3) < 6).firstOrNull?.$1;
 
-  Rect get bounds => hits.isEmpty
-      ? const Rect.fromLTWH(0, 0, 400, 300)
-      : hits
-            .map((h) => h.$2)
-            .reduce((a, b) => a.expandToInclude(b))
-            .inflate(30);
+  /// Everything drawn, with a margin: boxes, links and their break points, labels.
+  Rect get bounds {
+    Rect? all;
+    void add(Rect r) => all = all?.expandToInclude(r) ?? r;
+    for (final shape in shapes) {
+      switch (shape) {
+        case Box(:final rect):
+          add(rect);
+        case Line(:final a, :final b):
+          add(Rect.fromPoints(a, b));
+        case Poly(:final points):
+          for (var p in points) {
+            add(Rect.fromPoints(p, p));
+          }
+        case Label(:final pos, :final text, :final align):
+          final w = text.length * charW;
+          add(Rect.fromLTWH(pos.dx - w * (align + 1) / 2, pos.dy, w, rowH));
+      }
+    }
+    return all?.inflate(30) ?? const Rect.fromLTWH(0, 0, 400, 300);
+  }
 }
 
 double _distance(Offset p, Offset a, Offset b) {
@@ -190,8 +208,12 @@ Scene buildScene(
 
   /// Editing handles (break points, note resize grip); off for exports.
   bool handles = true,
+
+  /// Lists the enums in a column to the right of the diagram, for exports:
+  /// on screen they are in the side panel.
+  bool legend = false,
 }) {
-  final s = Scene();
+  final s = Scene(pal);
   final rects = <String, Rect>{};
   final linkHits = <(String, Rect)>[];
   int stroke(String id) =>
@@ -421,7 +443,7 @@ Scene buildScene(
     }
   }
 
-  for (final (id, title, rws, fill, radius, _) in nodes) {
+  void draw(String id, String title, List<_Row> rws, int fill, double radius) {
     final r = rects[id]!;
     final hot = id == selected || id == pending;
     s.shapes.add(
@@ -486,6 +508,32 @@ Scene buildScene(
       ));
     }
   }
+
+  for (final (id, title, rws, fill, radius, _) in nodes) {
+    draw(id, title, rws, fill, radius);
+  }
+  if (legend && d.enums.isNotEmpty) {
+    final b = s.shapes.isEmpty ? Rect.zero : s.bounds;
+    var y = b.top + 30;
+    for (final e in [...d.enums]..sort((a, b) => a.name.compareTo(b.name))) {
+      final chars = [e.name, ...e.values].map((t) => t.length).reduce(max);
+      final r = Rect.fromLTWH(
+        b.right + 10,
+        y,
+        max(80, chars * charW + 2 * padX),
+        headH + (e.values.isEmpty ? 0 : e.values.length * rowH + 6),
+      );
+      rects[e.id] = r;
+      draw(
+        e.id,
+        e.name,
+        [for (final v in e.values) (v, '', false)],
+        pal.enumType,
+        0,
+      );
+      y = r.bottom + 16;
+    }
+  }
   s.hits.addAll(linkHits);
   return s;
 }
@@ -497,7 +545,7 @@ String toSvg(Scene s) {
   final out = StringBuffer(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="${n(b.left)} ${n(b.top)} ${n(b.width)} ${n(b.height)}" '
     'width="${n(b.width)}" height="${n(b.height)}" font-family="monospace" font-size="$fontSize">\n'
-    '<rect x="${n(b.left)}" y="${n(b.top)}" width="${n(b.width)}" height="${n(b.height)}" fill="#ffffff"/>\n',
+    '<rect x="${n(b.left)}" y="${n(b.top)}" width="${n(b.width)}" height="${n(b.height)}" fill="${c(s.pal.canvas)}"/>\n',
   );
   for (final shape in s.shapes) {
     out.writeln(switch (shape) {

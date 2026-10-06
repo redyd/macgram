@@ -241,9 +241,18 @@ class _HomeState extends State<Home> {
   });
 
   Future<void> _export(String ext) => _guard(() async {
+    // Exports look like the screen: current theme, plus the enums as a legend.
+    final scene = buildScene(
+      c.doc,
+      uml: c.uml,
+      handles: false,
+      legend: true,
+      pal: Theme.of(context).brightness == Brightness.dark
+          ? Palette.dark
+          : Palette.light,
+    );
     final loc = await getSaveLocation(suggestedName: 'diagramme.$ext');
     if (loc == null) return;
-    final scene = buildScene(c.doc, uml: c.uml, handles: false);
     if (ext == 'svg') {
       File(loc.path).writeAsStringSync(toSvg(scene));
     } else {

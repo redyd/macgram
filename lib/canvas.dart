@@ -80,7 +80,7 @@ Future<Uint8List> toPng(Scene s, {double scale = 2}) async {
   final canvas = Canvas(recorder)
     ..scale(scale)
     ..translate(-b.left, -b.top)
-    ..drawRect(b, Paint()..color = Colors.white);
+    ..drawRect(b, Paint()..color = Color(s.pal.canvas));
   paintScene(canvas, s);
   final image = await recorder.endRecording().toImage(
     (b.width * scale).ceil(),

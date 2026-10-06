@@ -275,6 +275,28 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
     expect(s.hit(rect.bottomRight - const Offset(4, 4)), 'resize|n-1');
   });
 
+  test(
+    'export holds everything: bent arrows far outside the boxes, and the enums',
+    () {
+      final d = sample();
+      d.arrows.single.bends = [(-900, -700)];
+      final s = buildScene(d, handles: false, legend: true, pal: Palette.dark);
+      expect(s.bounds.contains(const Offset(-900, -700)), isTrue);
+      final enumBox = s.hits.firstWhere((h) => h.$1 == 't-1').$2;
+      expect(s.bounds.contains(enumBox.bottomRight), isTrue);
+      // The legend sits clear of the diagram, to its right.
+      expect(
+        s.hits
+            .where((h) => h.$1 != 't-1')
+            .every((h) => h.$2.right < enumBox.left),
+        isTrue,
+      );
+      final svg = toSvg(s);
+      expect(svg, contains('payee'));
+      expect(svg, contains('fill="#14171c"/>')); // dark canvas background
+    },
+  );
+
   Future<Controller> pumpApp(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
