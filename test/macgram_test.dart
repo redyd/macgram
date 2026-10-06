@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macgram/canvas.dart';
@@ -475,6 +477,60 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       expect(c.doc.encode(), isNot(tangled));
       c.undo();
       expect(c.doc.encode(), tangled);
+    },
+  );
+
+  testWidgets(
+    'navigation: scroll, Shift+scroll and right-button drag move the view; left drag does not',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = Controller();
+      await tester.pumpWidget(App(c));
+      final canvas = find.byType(DiagramCanvas);
+      final centre = tester.getCenter(canvas),
+          local = centre - tester.getTopLeft(canvas);
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(centre));
+
+      await tester.sendEventToBinding(
+        mouse.scroll(const Offset(0, 100)),
+      ); // view goes down 100
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendEventToBinding(
+        mouse.scroll(const Offset(0, 50)),
+      ); // view goes right 50
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+
+      final right = await tester.startGesture(
+        centre,
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await right.moveBy(
+        const Offset(30, 0),
+      ); // drags the diagram right: view goes left 30
+      await right.up();
+      final left = await tester.startGesture(
+        centre,
+        kind: PointerDeviceKind.mouse,
+      );
+      await left.moveBy(const Offset(200, 200));
+      await left.up();
+      await tester.pump();
+
+      // An entity dropped at the centre of the window lands where the view now is.
+      await tester.tap(find.text('Entité'));
+      await tester.pump();
+      await tester.tapAt(centre);
+      await tester.pump();
+      expect(
+        c.doc.layout.values.single,
+        Controller.snap(
+          local + const Offset(50 - 30, 100) - const Offset(50, 14),
+        ),
+      );
     },
   );
 }

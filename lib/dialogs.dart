@@ -27,7 +27,8 @@ const _help = '''
 • Attributs : Entrée ajoute une ligne, Tab passe du nom au type,
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.
 • Réarranger (baguette) : replace les boîtes pour limiter les croisements ; Ctrl+Z pour revenir.
-• Molette : zoom. Glisser le fond : déplacer la vue. Suppr : supprimer la sélection.''';
+• Navigation : glisser au clic droit, molette (vertical), Maj+molette (horizontal),
+  Ctrl+molette (zoom). Suppr : supprimer la sélection.''';
 
 const _dense = InputDecoration();
 const _gap = SizedBox(height: 12);

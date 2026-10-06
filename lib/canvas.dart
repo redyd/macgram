@@ -210,10 +210,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
 
   void _dragUpdate(Offset delta) => setState(() {
     final key = _drag;
-    if (key == null) {
-      _pan += delta;
-      return;
-    }
+    if (key == null) return;
     _raw += delta / _zoom;
     if (key.startsWith('bend|')) {
       c.moveBend(key, _raw);
@@ -265,12 +262,30 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
         autofocus: true,
         child: Listener(
           onPointerDown: (_) => _focus.requestFocus(),
+          // Navigation: drag with the right button, scroll vertically,
+          // Shift+scroll horizontally, Ctrl+scroll to zoom on the cursor.
+          onPointerMove: (e) {
+            if (e.buttons & kSecondaryMouseButton != 0) {
+              setState(() => _pan += e.delta);
+            }
+          },
           onPointerSignal: (e) {
             if (e is! PointerScrollEvent) return;
+            final keys = HardwareKeyboard.instance;
             setState(() {
-              final z = (_zoom * exp(-e.scrollDelta.dy / 400)).clamp(0.2, 4.0);
-              _pan = e.localPosition - (e.localPosition - _pan) * (z / _zoom);
-              _zoom = z;
+              if (keys.isControlPressed || keys.isMetaPressed) {
+                final z = (_zoom * exp(-e.scrollDelta.dy / 400)).clamp(
+                  0.2,
+                  4.0,
+                );
+                _pan = e.localPosition - (e.localPosition - _pan) * (z / _zoom);
+                _zoom = z;
+              } else if (keys.isShiftPressed && e.scrollDelta.dx == 0) {
+                // A plain wheel only reports dy; some platforms already swap it.
+                _pan -= Offset(e.scrollDelta.dy, 0);
+              } else {
+                _pan -= e.scrollDelta;
+              }
             });
           },
           child: GestureDetector(
