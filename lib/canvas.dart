@@ -91,15 +91,32 @@ Future<Uint8List> toPng(Scene s, {double scale = 2}) async {
 }
 
 class _Painter extends CustomPainter {
+  final Palette pal;
   final Scene scene;
   final Offset pan;
   final double zoom;
-  _Painter(this.scene, this.pan, this.zoom);
+  _Painter(this.scene, this.pan, this.zoom, this.pal);
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.clipRect(Offset.zero & size);
+    if (zoom >= 0.5) {
+      // Dot grid, anchored to the scene so it pans and zooms with it.
+      final step = 20 * zoom;
+      canvas.drawPoints(
+        ui.PointMode.points,
+        [
+          for (var x = pan.dx % step; x < size.width; x += step)
+            for (var y = pan.dy % step; y < size.height; y += step)
+              Offset(x, y),
+        ],
+        Paint()
+          ..color = Color(pal.dot)
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
     canvas
-      ..clipRect(Offset.zero & size)
       ..translate(pan.dx, pan.dy)
       ..scale(zoom);
     paintScene(canvas, scene);
@@ -126,6 +143,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
   String? _down, _drag, _lastTap;
   DateTime _lastTapAt = DateTime(0);
   Timer? _legTimer;
+  MouseCursor _cursor = SystemMouseCursors.basic;
   late Scene _scene;
 
   Controller get c => widget.c;
@@ -206,13 +224,35 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
     }
   });
 
+  /// The cursor says what a click or drag would do at [local].
+  MouseCursor _cursorAt(Offset local) {
+    final key = _scene.hit(_toScene(local));
+    if (c.tool != Tool.select) {
+      return key != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.precise;
+    }
+    if (key == null) return SystemMouseCursors.basic;
+    if (key.startsWith('resize|')) {
+      return SystemMouseCursors.resizeUpLeftDownRight;
+    }
+    if (key.startsWith('bend|') || c.doc.layout.containsKey(key)) {
+      return SystemMouseCursors.move;
+    }
+    return SystemMouseCursors.click;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pal = Theme.of(context).brightness == Brightness.dark
+        ? Palette.dark
+        : Palette.light;
     _scene = buildScene(
       c.doc,
       uml: c.uml,
       selected: c.selected,
       pending: c.pending,
+      pal: pal,
     );
     return CallbackShortcuts(
       bindings: {
@@ -251,11 +291,18 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
               _drag = null;
               c.endCoalesce();
             },
-            child: ColoredBox(
-              color: const Color(0xFFF5F5F2),
-              child: CustomPaint(
-                painter: _Painter(_scene, _pan, _zoom),
-                size: Size.infinite,
+            child: MouseRegion(
+              cursor: _cursor,
+              onHover: (e) {
+                final cursor = _cursorAt(e.localPosition);
+                if (cursor != _cursor) setState(() => _cursor = cursor);
+              },
+              child: ColoredBox(
+                color: Color(pal.canvas),
+                child: CustomPaint(
+                  painter: _Painter(_scene, _pan, _zoom, pal),
+                  size: Size.infinite,
+                ),
               ),
             ),
           ),

@@ -10,6 +10,7 @@ import 'controller.dart';
 import 'dialogs.dart';
 import 'mld.dart';
 import 'scene.dart';
+import 'theme.dart';
 
 void main(List<String> args) {
   final c = Controller();
@@ -28,14 +29,16 @@ class App extends StatelessWidget {
   const App(this.c, {super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'macgram',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorSchemeSeed: Colors.blueGrey,
-      visualDensity: VisualDensity.compact,
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: themeMode,
+    builder: (_, mode, _) => MaterialApp(
+      title: 'macgram',
+      debugShowCheckedModeBanner: false,
+      theme: appTheme(Brightness.light),
+      darkTheme: appTheme(Brightness.dark),
+      themeMode: mode,
+      home: Home(c),
     ),
-    home: Home(c),
   );
 }
 
@@ -143,7 +146,35 @@ class _HomeState extends State<Home> {
   Widget _btn(IconData icon, String tooltip, VoidCallback? onTap) =>
       IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onTap);
 
+  /// Flat toolbar toggle: tinted when on.
+  Widget _toggle(String label, bool on, VoidCallback onTap, [IconData? icon]) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: on ? accent : null,
+          backgroundColor: on ? accent.withValues(alpha: 0.18) : null,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18),
+              const SizedBox(width: 6),
+            ],
+            Text(label),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _toolbar() {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
     const sep = SizedBox(height: 24, child: VerticalDivider(width: 20));
     final hint = switch (c.tool) {
       Tool.select => '',
@@ -158,10 +189,13 @@ class _HomeState extends State<Home> {
       _ => 'Cliquer sur le canevas pour placer',
     };
     return Material(
-      elevation: 1,
+      color: theme.colorScheme.surface,
       child: Container(
         width: double.infinity,
         alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: theme.colorScheme.outline)),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -174,16 +208,7 @@ class _HomeState extends State<Home> {
               _btn(Icons.redo, 'Rétablir (Ctrl+Y)', c.canRedo ? c.redo : null),
               sep,
               for (final (tool, icon, label) in _tools)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: ChoiceChip(
-                    avatar: Icon(icon, size: 18),
-                    label: Text(label),
-                    showCheckmark: false,
-                    selected: c.tool == tool,
-                    onSelected: (_) => c.setTool(tool),
-                  ),
-                ),
+                _toggle(label, c.tool == tool, () => c.setTool(tool), icon),
               sep,
               SegmentedButton<bool>(
                 showSelectedIcon: false,
@@ -195,11 +220,7 @@ class _HomeState extends State<Home> {
                 onSelectionChanged: (_) => c.toggleUml(),
               ),
               const SizedBox(width: 8),
-              FilterChip(
-                label: const Text('MLD'),
-                selected: c.showMld,
-                onSelected: (_) => c.toggleMld(),
-              ),
+              _toggle('MLD', c.showMld, c.toggleMld),
               PopupMenuButton<String>(
                 tooltip: 'Exporter',
                 icon: const Icon(Icons.image_outlined),
@@ -209,13 +230,18 @@ class _HomeState extends State<Home> {
                   PopupMenuItem(value: 'svg', child: Text('Exporter en SVG')),
                 ],
               ),
+              _btn(
+                dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                dark ? 'Thème clair' : 'Thème sombre',
+                () => themeMode.value = dark ? ThemeMode.light : ThemeMode.dark,
+              ),
               _btn(Icons.help_outline, 'Aide', () => showHelp(context)),
               sep,
               Text(
                 '${c.path?.split(Platform.pathSeparator).last ?? 'sans titre'}${c.dirty ? ' •' : ''}',
               ),
               const SizedBox(width: 16),
-              Text(hint, style: TextStyle(color: Colors.orange.shade900)),
+              Text(hint, style: TextStyle(color: theme.colorScheme.primary)),
             ],
           ),
         ),
@@ -287,9 +313,11 @@ class _HomeState extends State<Home> {
                       Container(
                         height: 200,
                         width: double.infinity,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           border: Border(
-                            top: BorderSide(color: Colors.black26),
+                            top: BorderSide(
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
                           ),
                         ),
                         child: SingleChildScrollView(

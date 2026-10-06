@@ -12,11 +12,52 @@ import 'model.dart';
 // TextPainter if pixel-exact boxes ever matter.
 const fontSize = 13.0, charW = 7.9, rowH = 20.0, headH = 28.0, padX = 12.0;
 
-const _ink = 0xFF263238,
-    _grey = 0xFF78909C,
-    _sel = 0xFF1565C0,
-    _pend = 0xFFEF6C00,
-    _arrow = 0xFF6D4C41;
+/// Diagram colours (ARGB). Exports always use [light].
+class Palette {
+  final int ink, grey, sel, pend, arrow, entity, association, enumType, note;
+  final int canvas, dot;
+  const Palette({
+    required this.ink,
+    required this.grey,
+    required this.sel,
+    required this.pend,
+    required this.arrow,
+    required this.entity,
+    required this.association,
+    required this.enumType,
+    required this.note,
+    required this.canvas,
+    required this.dot,
+  });
+
+  static const light = Palette(
+    ink: 0xFF263238,
+    grey: 0xFF78909C,
+    sel: 0xFF1565C0,
+    pend: 0xFFEF6C00,
+    arrow: 0xFF6D4C41,
+    entity: 0xFFFFFFFF,
+    association: 0xFFE3F2FD,
+    enumType: 0xFFF3E5F5,
+    note: 0xFFFFF9C4,
+    canvas: 0xFFF4F4F0,
+    dot: 0xFFD6D6CE,
+  );
+
+  static const dark = Palette(
+    ink: 0xFFE4E7EE,
+    grey: 0xFF8892A6,
+    sel: 0xFF7AB7FF,
+    pend: 0xFFFFB454,
+    arrow: 0xFFD7A77B,
+    entity: 0xFF232831,
+    association: 0xFF1C3350,
+    enumType: 0xFF37285A,
+    note: 0xFF4A4020,
+    canvas: 0xFF14171C,
+    dot: 0xFF2A303B,
+  );
+}
 
 sealed class Shape {
   const Shape();
@@ -29,8 +70,8 @@ class Box extends Shape {
   const Box(
     this.rect, {
     this.radius = 0,
-    this.fill = 0xFFFFFFFF,
-    this.stroke = _ink,
+    required this.fill,
+    required this.stroke,
     this.strokeWidth = 1.2,
   });
 }
@@ -38,13 +79,13 @@ class Box extends Shape {
 class Line extends Shape {
   final Offset a, b;
   final int color;
-  const Line(this.a, this.b, [this.color = _ink]);
+  const Line(this.a, this.b, this.color);
 }
 
 class Poly extends Shape {
   final List<Offset> points;
   final int fill;
-  const Poly(this.points, [this.fill = _ink]);
+  const Poly(this.points, this.fill);
 }
 
 class Label extends Shape {
@@ -57,7 +98,7 @@ class Label extends Shape {
     this.pos,
     this.text, {
     this.align = -1,
-    this.color = _ink,
+    required this.color,
     this.bold = false,
     this.underline = false,
   });
@@ -145,6 +186,7 @@ Scene buildScene(
   bool uml = false,
   String? selected,
   String? pending,
+  Palette pal = Palette.light,
 
   /// Editing handles (break points, note resize grip); off for exports.
   bool handles = true,
@@ -153,7 +195,7 @@ Scene buildScene(
   final rects = <String, Rect>{};
   final linkHits = <(String, Rect)>[];
   int stroke(String id) =>
-      id == selected ? _sel : (id == pending ? _pend : _ink);
+      id == selected ? pal.sel : (id == pending ? pal.pend : pal.ink);
 
   // In UML a plain binary association is just a line between the two classes.
   bool direct(Association a) =>
@@ -192,14 +234,14 @@ Scene buildScene(
         )
       >[
         for (final e in d.entities)
-          (e.id, e.name, rows(e.attributes), 0xFFFFFFFF, 0, null),
+          (e.id, e.name, rows(e.attributes), pal.entity, 0, null),
         for (final a in d.associations)
           if (!direct(a))
             (
               a.id,
               uml ? '«association» ${a.name}' : a.name,
               rows(a.attributes),
-              0xFFE3F2FD,
+              pal.association,
               uml ? 0 : 14,
               null,
             ),
@@ -208,11 +250,11 @@ Scene buildScene(
             e.id,
             e.name,
             [for (final v in e.values) (v, '', false)],
-            0xFFF3E5F5,
+            pal.enumType,
             0,
             null,
           ),
-        for (final n in d.notes) (n.id, '', noteRows(n), 0xFFFFF9C4, 3, n.size),
+        for (final n in d.notes) (n.id, '', noteRows(n), pal.note, 3, n.size),
       ];
 
   for (final (id, title, rws, _, _, size) in nodes) {
@@ -231,8 +273,10 @@ Scene buildScene(
     );
   }
 
-  void text(Offset centre, String t, String key, [int color = _ink]) {
-    s.shapes.add(Label(centre - const Offset(0, 8), t, align: 0, color: color));
+  void text(Offset centre, String t, String key, [int? color]) {
+    s.shapes.add(
+      Label(centre - const Offset(0, 8), t, align: 0, color: color ?? pal.ink),
+    );
     linkHits.add((
       key,
       Rect.fromCenter(
@@ -280,6 +324,7 @@ Scene buildScene(
         Box(
           Rect.fromCircle(center: b, radius: 4.5),
           radius: 4.5,
+          fill: pal.entity,
           stroke: color,
         ),
       );
@@ -323,7 +368,7 @@ Scene buildScene(
             owner + u * 8 + n * 5,
             owner + u * 16,
             owner + u * 8 - n * 5,
-          ]),
+          ], pal.ink),
         );
       }
       continue;
@@ -339,7 +384,15 @@ Scene buildScene(
       final off =
           _normal(_unit(re.center - ra.center)) *
           ((same.indexOf(i) - (same.length - 1) / 2) * 34);
-      final pts = link(key, ra, re, leg.bends, _ink, off: off, hideEnds: true);
+      final pts = link(
+        key,
+        ra,
+        re,
+        leg.bends,
+        pal.ink,
+        off: off,
+        hideEnds: true,
+      );
       if (uml) {
         card(
           pts.first,
@@ -357,7 +410,7 @@ Scene buildScene(
       }
       if (leg.note.isNotEmpty) {
         final (m, u) = middle(pts);
-        text(_beside(m, u, leg.note), leg.note, key, _grey);
+        text(_beside(m, u, leg.note), leg.note, key, pal.grey);
       }
     }
   }
@@ -367,7 +420,7 @@ Scene buildScene(
     if (rf == null || rt == null) {
       continue; // an end is a UML-inlined association
     }
-    final c = r.id == selected ? _sel : _arrow;
+    final c = r.id == selected ? pal.sel : pal.arrow;
     final pts = link(r.id, rf, rt, r.bends, c);
     final tip = pts.last, u = _unit(tip - pts[pts.length - 2]), n = _normal(u);
     s.shapes.add(Poly([tip, tip - u * 11 + n * 5, tip - u * 11 - n * 5], c));
@@ -392,20 +445,37 @@ Scene buildScene(
     s.hits.add((id, r));
     if (title.isNotEmpty) {
       s.shapes.add(
-        Label(Offset(r.center.dx, r.top + 6), title, align: 0, bold: true),
+        Label(
+          Offset(r.center.dx, r.top + 6),
+          title,
+          align: 0,
+          bold: true,
+          color: pal.ink,
+        ),
       );
       if (rws.isNotEmpty) {
         s.shapes.add(
-          Line(Offset(r.left, r.top + headH), Offset(r.right, r.top + headH)),
+          Line(
+            Offset(r.left, r.top + headH),
+            Offset(r.right, r.top + headH),
+            pal.ink,
+          ),
         );
       }
     }
     for (final (i, row) in rws.indexed) {
       final y = r.top + (title.isEmpty ? 6 : headH + 4) + i * rowH;
-      s.shapes.add(Label(Offset(r.left + padX, y), row.$1, underline: row.$3));
+      s.shapes.add(
+        Label(
+          Offset(r.left + padX, y),
+          row.$1,
+          underline: row.$3,
+          color: pal.ink,
+        ),
+      );
       if (row.$2.isNotEmpty) {
         s.shapes.add(
-          Label(Offset(r.right - padX, y), row.$2, align: 1, color: _grey),
+          Label(Offset(r.right - padX, y), row.$2, align: 1, color: pal.grey),
         );
       }
     }
@@ -417,7 +487,7 @@ Scene buildScene(
           c - const Offset(11, 2),
           c - const Offset(2, 11),
           c - const Offset(2, 2),
-        ], _grey),
+        ], pal.grey),
       );
       linkHits.add((
         'resize|$id',

@@ -23,7 +23,7 @@ const _help = '''
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.
 • Molette : zoom. Glisser le fond : déplacer la vue. Suppr : supprimer la sélection.''';
 
-const _dense = InputDecoration(isDense: true, border: OutlineInputBorder());
+const _dense = InputDecoration();
 const _gap = SizedBox(height: 12);
 
 Future<void> showHelp(BuildContext context) => showDialog<void>(
@@ -163,7 +163,9 @@ Future<void> showItemDialog(
             },
             icon: const Icon(Icons.delete_outline),
             label: const Text('Supprimer'),
-            style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
           ),
           const Spacer(),
           FilledButton(
