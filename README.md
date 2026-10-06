@@ -1,3 +1,5 @@
+<img src="logo.png" alt="macgram" width="128">
+
 # macgram
 
 Éditeur de MCD (modèle conceptuel de données, méthode Merise) pour le bureau : Linux, Windows et macOS. Une alternative à Looping dont les fichiers se versionnent proprement avec git.
@@ -77,6 +79,17 @@ Flutter ne cross-compile pas : chaque cible se build sur son OS. Le dossier prod
 tar -czf macgram-linux-x64.tar.gz -C build/linux/x64/release/bundle .
 ```
 
+### Paquet RPM (Fedora)
+
+```bash
+flutter build linux --release
+rpmbuild -bb linux/macgram.spec --define "_topdir $PWD/build/rpm" --define "src $PWD" \
+  --define "ver $(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+sudo dnf install build/rpm/RPMS/x86_64/macgram-*.rpm
+```
+
+Le build du paquet demande `rpm-build` et ImageMagick (pour redimensionner `logo.png`). `dnf` installe GTK 3 si besoin, ajoute `macgram` au `PATH` et au menu d'applications. Pour désinstaller : `sudo dnf remove macgram`.
+
 ## Développement
 
 ```bash
@@ -95,5 +108,9 @@ flutter test
 | `lib/autolayout.dart` | réarrangement automatique |
 | `lib/theme.dart` | thèmes clair et sombre |
 | `lib/main.dart` | fenêtre, barre d'outils, fichiers |
+
+## Licence
+
+[GPL-3.0-or-later](LICENSE) : tu peux utiliser, modifier et redistribuer macgram, à condition que les versions dérivées restent sous la même licence et que leur code source soit fourni.
 
 [VIBECODED]
