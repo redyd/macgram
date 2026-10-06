@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -6,38 +7,61 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'controller.dart';
+import 'dialogs.dart';
 import 'scene.dart';
 
 void paintScene(Canvas canvas, Scene s) {
   for (final shape in s.shapes) {
     switch (shape) {
-      case Box(:final rect, :final radius, :final fill, :final stroke, :final strokeWidth):
+      case Box(
+        :final rect,
+        :final radius,
+        :final fill,
+        :final stroke,
+        :final strokeWidth,
+      ):
         final rr = RRect.fromRectAndRadius(rect, Radius.circular(radius));
         canvas
           ..drawRRect(rr, Paint()..color = Color(fill))
           ..drawRRect(
-              rr,
-              Paint()
-                ..color = Color(stroke)
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = strokeWidth);
+            rr,
+            Paint()
+              ..color = Color(stroke)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = strokeWidth,
+          );
       case Line(:final a, :final b, :final color):
         canvas.drawLine(
-            a,
-            b,
-            Paint()
-              ..color = Color(color)
-              ..strokeWidth = 1.2);
+          a,
+          b,
+          Paint()
+            ..color = Color(color)
+            ..strokeWidth = 1.2,
+        );
       case Poly(:final points, :final fill):
-        canvas.drawPath(Path()..addPolygon(points, true), Paint()..color = Color(fill));
-      case Label(:final pos, :final text, :final align, :final color, :final bold, :final underline):
+        canvas.drawPath(
+          Path()..addPolygon(points, true),
+          Paint()..color = Color(fill),
+        );
+      case Label(
+        :final pos,
+        :final text,
+        :final align,
+        :final color,
+        :final bold,
+        :final underline,
+      ):
         final tp = TextPainter(
           textDirection: TextDirection.ltr,
           text: TextSpan(
             text: text,
             style: TextStyle(
               fontFamily: 'monospace',
-              fontFamilyFallback: const ['DejaVu Sans Mono', 'Consolas', 'Menlo'],
+              fontFamilyFallback: const [
+                'DejaVu Sans Mono',
+                'Consolas',
+                'Menlo',
+              ],
               fontSize: fontSize,
               color: Color(color),
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
@@ -58,8 +82,12 @@ Future<Uint8List> toPng(Scene s, {double scale = 2}) async {
     ..translate(-b.left, -b.top)
     ..drawRect(b, Paint()..color = Colors.white);
   paintScene(canvas, s);
-  final image = await recorder.endRecording().toImage((b.width * scale).ceil(), (b.height * scale).ceil());
-  return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+  final image = await recorder.endRecording().toImage(
+    (b.width * scale).ceil(),
+    (b.height * scale).ceil(),
+  );
+  return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer
+      .asUint8List();
 }
 
 class _Painter extends CustomPainter {
@@ -90,10 +118,14 @@ class DiagramCanvas extends StatefulWidget {
 }
 
 class _DiagramCanvasState extends State<DiagramCanvas> {
+  static const _doubleClick = Duration(milliseconds: 300);
+
   final _focus = FocusNode();
   Offset _pan = Offset.zero, _raw = Offset.zero;
   double _zoom = 1;
-  String? _down, _drag;
+  String? _down, _drag, _lastTap;
+  DateTime _lastTapAt = DateTime(0);
+  Timer? _legTimer;
   late Scene _scene;
 
   Controller get c => widget.c;
@@ -101,13 +133,87 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
 
   @override
   void dispose() {
+    _legTimer?.cancel();
     _focus.dispose();
     super.dispose();
   }
 
+  void _tap(Offset local) {
+    final p = _toScene(local), key = _scene.hit(p);
+    final wasSelect = c.tool == Tool.select;
+    c.tap(key, p);
+    if (!wasSelect ||
+        key == null ||
+        key.startsWith('bend|') ||
+        key.startsWith('resize|')) {
+      return;
+    }
+
+    // Double click is detected here rather than with onDoubleTap, which would delay every single click.
+    final target = Controller.linkOf(key) ?? key;
+    final now = DateTime.now();
+    final twice =
+        target == _lastTap && now.difference(_lastTapAt) < _doubleClick;
+    _lastTap = twice ? null : target;
+    _lastTapAt = now;
+
+    if (target.startsWith('leg:')) {
+      // Only links wait for a possible second click: one click edits the
+      // cardinality, two go straight to the note.
+      _legTimer?.cancel();
+      if (twice) {
+        showLegDialog(context, c, target, focusNote: true);
+      } else {
+        _legTimer = Timer(_doubleClick, () {
+          if (mounted) showLegDialog(context, c, target);
+        });
+      }
+    } else if (twice) {
+      showItemDialog(context, c, target);
+    }
+  }
+
+  void _dragStart() {
+    final key = _down;
+    if (c.tool != Tool.select || key == null) return;
+    if (key.startsWith('bend|')) {
+      _raw = _scene.hits.firstWhere((h) => h.$1 == key).$2.center;
+    } else if (key.startsWith('resize|')) {
+      final r = _scene.hits.firstWhere((h) => h.$1 == key.substring(7)).$2;
+      _raw = Offset(r.width, r.height);
+    } else if (c.doc.layout[key] case (final x, final y)) {
+      _raw = Offset(x.toDouble(), y.toDouble());
+      c.select(key);
+    } else {
+      return;
+    }
+    _drag = key;
+  }
+
+  void _dragUpdate(Offset delta) => setState(() {
+    final key = _drag;
+    if (key == null) {
+      _pan += delta;
+      return;
+    }
+    _raw += delta / _zoom;
+    if (key.startsWith('bend|')) {
+      c.moveBend(key, _raw);
+    } else if (key.startsWith('resize|')) {
+      c.resizeNote(key.substring(7), _raw);
+    } else {
+      c.move(key, _raw);
+    }
+  });
+
   @override
   Widget build(BuildContext context) {
-    _scene = buildScene(c.doc, uml: c.uml, selected: c.selected, pending: c.pending);
+    _scene = buildScene(
+      c.doc,
+      uml: c.uml,
+      selected: c.selected,
+      pending: c.pending,
+    );
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.delete): c.deleteSelected,
@@ -129,30 +235,28 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
           },
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTapUp: (d) => c.tap(_scene.hit(_toScene(d.localPosition)), _toScene(d.localPosition)),
-            onPanDown: (d) => _down = _scene.hit(_toScene(d.localPosition)),
-            onPanStart: (_) {
-              final pos = c.doc.layout[_down];
-              if (c.tool != Tool.select || pos == null) return;
-              _drag = _down;
-              _raw = Offset(pos.$1.toDouble(), pos.$2.toDouble());
-              c.select(_drag);
-            },
-            onPanUpdate: (d) => setState(() {
-              if (_drag == null) {
-                _pan += d.delta;
-              } else {
-                _raw += d.delta / _zoom;
-                c.move(_drag!, _raw);
+            onTapUp: (d) => _tap(d.localPosition),
+            // Right click breaks a link, or removes the break point under the cursor.
+            onSecondaryTapUp: (d) {
+              final p = _toScene(d.localPosition), key = _scene.hit(p);
+              if (key != null &&
+                  (key.startsWith('seg|') || key.startsWith('bend|'))) {
+                c.toggleBend(key, p);
               }
-            }),
+            },
+            onPanDown: (d) => _down = _scene.hit(_toScene(d.localPosition)),
+            onPanStart: (_) => _dragStart(),
+            onPanUpdate: (d) => _dragUpdate(d.delta),
             onPanEnd: (_) {
               _drag = null;
               c.endCoalesce();
             },
             child: ColoredBox(
               color: const Color(0xFFF5F5F2),
-              child: CustomPaint(painter: _Painter(_scene, _pan, _zoom), size: Size.infinite),
+              child: CustomPaint(
+                painter: _Painter(_scene, _pan, _zoom),
+                size: Size.infinite,
+              ),
             ),
           ),
         ),

@@ -4,7 +4,13 @@ class _Col {
   final String name;
   final String? type;
   final bool pk, fk, nullable;
-  _Col(this.name, this.type, {this.pk = false, this.fk = false, this.nullable = false});
+  _Col(
+    this.name,
+    this.type, {
+    this.pk = false,
+    this.fk = false,
+    this.nullable = false,
+  });
   @override
   String toString() =>
       '${pk ? '_' : ''}${fk ? '#' : ''}$name${pk ? '_' : ''}${type == null ? '' : ': $type'}${nullable ? '?' : ''}';
@@ -35,7 +41,8 @@ String mld(Document d) {
     return col.toLowerCase().contains(suffix) ? col : '${col}_$suffix';
   }
 
-  _Col attr(Attribute a) => _Col(a.name, d.typeName(a.type), pk: a.isId, nullable: a.nullable);
+  _Col attr(Attribute a) =>
+      _Col(a.name, d.typeName(a.type), pk: a.isId, nullable: a.nullable);
 
   // `seen` stops reflexive associations and weak-entity cycles from recursing forever.
   List<_Col> cols(String id, Set<String> seen) {
@@ -46,7 +53,16 @@ String mld(Document d) {
       if (h == null || h.entityId != id) continue;
       final other = ents[a.legs.firstWhere((l) => !identical(l, h)).entityId]!;
       for (final c in cols(other.id, {...seen, id}).where((c) => c.pk)) {
-        add(out, _Col(fkName(c.name, other), null, pk: h.relative, fk: true, nullable: h.card.startsWith('0')));
+        add(
+          out,
+          _Col(
+            fkName(c.name, other),
+            null,
+            pk: h.relative,
+            fk: true,
+            nullable: h.card.startsWith('0'),
+          ),
+        );
       }
       for (final x in a.attributes) {
         add(out, attr(x));
@@ -56,16 +72,23 @@ String mld(Document d) {
   }
 
   final lines = <String>[
-    for (final e in [...d.enums]..sort((a, b) => a.name.compareTo(b.name))) 'enum ${e.name} { ${e.values.join(', ')} }',
+    for (final e in [...d.enums]..sort((a, b) => a.name.compareTo(b.name)))
+      'enum ${e.name} { ${e.values.join(', ')} }',
     if (d.enums.isNotEmpty) '',
-    for (final e in [...d.entities]..sort((a, b) => a.name.compareTo(b.name))) '${e.name}(${cols(e.id, {}).join(', ')})',
+    for (final e in [...d.entities]..sort((a, b) => a.name.compareTo(b.name)))
+      '${e.name}(${cols(e.id, {}).join(', ')})',
   ];
-  for (final a in [...d.associations]..sort((a, b) => a.name.compareTo(b.name))) {
+  for (final a in [
+    ...d.associations,
+  ]..sort((a, b) => a.name.compareTo(b.name))) {
     if (holder(a) != null || a.legs.isEmpty) continue;
     final out = <_Col>[];
     for (final l in a.legs) {
       for (final c in cols(l.entityId, {}).where((c) => c.pk)) {
-        add(out, _Col(fkName(c.name, ents[l.entityId]!), null, pk: true, fk: true));
+        add(
+          out,
+          _Col(fkName(c.name, ents[l.entityId]!), null, pk: true, fk: true),
+        );
       }
     }
     for (final x in a.attributes) {

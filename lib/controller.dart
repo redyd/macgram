@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset;
@@ -20,9 +21,6 @@ class Controller extends ChangeNotifier {
   /// The file changed on disk (git pull, checkout…) while there were unsaved edits.
   bool changedOnDisk = false;
 
-  /// Bumped whenever text fields must be rebuilt from the document.
-  int revision = 0;
-
   String _saved = Document().encode();
   final _undo = <String>[], _redo = <String>[];
   String? _tag;
@@ -38,13 +36,13 @@ class Controller extends ChangeNotifier {
   }
 
   void setTool(Tool t) => _set(() {
-        tool = t;
-        pending = null;
-      });
+    tool = t;
+    pending = null;
+  });
   void select(String? id) => _set(() {
-        selected = id;
-        _tag = null;
-      });
+    selected = id;
+    _tag = null;
+  });
   void toggleUml() => _set(() => uml = !uml);
   void toggleMld() => _set(() => showMld = !showMld);
   void endCoalesce() => _tag = null;
@@ -67,16 +65,17 @@ class Controller extends ChangeNotifier {
     to.add(doc.encode());
     doc = Document.decode(from.removeLast());
     selected = pending = _tag = null;
-    revision++;
     notifyListeners();
   }
 
   void undo() => _restore(_undo, _redo);
   void redo() => _restore(_redo, _undo);
 
-  static (int, int) snap(Offset p) => ((p.dx / 10).round() * 10, (p.dy / 10).round() * 10);
+  static (int, int) snap(Offset p) =>
+      ((p.dx / 10).round() * 10, (p.dy / 10).round() * 10);
 
-  void move(String id, Offset p) => change(() => doc.layout[id] = snap(p), 'move:$id');
+  void move(String id, Offset p) =>
+      change(() => doc.layout[id] = snap(p), 'move:$id');
 
   void deleteSelected() {
     if (selected == null) return;
@@ -87,31 +86,42 @@ class Controller extends ChangeNotifier {
   }
 
   void cancel() => _set(() {
-        tool = Tool.select;
-        pending = selected = null;
-      });
+    tool = Tool.select;
+    pending = selected = null;
+  });
 
   /// A click on the canvas: [key] is what was hit (see Scene.hits), [p] the scene position.
   void tap(String? key, Offset p) {
     void add(Item item, void Function() insert) => change(() {
-          insert();
-          doc.layout[item.id] = snap(p - const Offset(50, 14));
-          selected = item.id;
-          tool = Tool.select;
-        });
+      insert();
+      doc.layout[item.id] = snap(p - const Offset(50, 14));
+      selected = item.id;
+      tool = Tool.select;
+    });
     switch (tool) {
       case Tool.select:
-        if (key != null && key.startsWith('leg:')) {
-          final [_, id, i] = key.split(':');
-          final leg = doc.associations.firstWhere((a) => a.id == id).legs[int.parse(i)];
-          change(() => leg.card = cards[(cards.indexOf(leg.card) + 1) % cards.length]);
-        } else {
-          select(key);
-        }
+        // A link selects its association; handles (resize…) keep the selection.
+        final id = key == null ? null : (linkOf(key) ?? key);
+        select(
+          id == null
+              ? null
+              : (id.startsWith('leg:')
+                    ? id.split(':')[1]
+                    : (doc.item(id) == null ? selected : id)),
+        );
       case Tool.entity:
         final e = Entity(id: newId('e'));
         add(e, () => doc.entities.add(e));
       case Tool.association:
+        // Like Looping: click two entities to relate them. A click on empty space drops a lone association.
+        if (key != null && key.startsWith('e-')) {
+          if (pending == null) return _set(() => pending = key);
+          final from = pending!;
+          pending = null;
+          tool = Tool.select;
+          return _link(from, key);
+        }
+        if (pending != null) return _set(() => pending = null);
         final a = Association(id: newId('a'));
         add(a, () => doc.associations.add(a));
       case Tool.enumType:
@@ -133,12 +143,55 @@ class Controller extends ChangeNotifier {
         if (linking) {
           _link(from, key);
         } else if (from != key) {
-          change(() => doc.arrows.add(Arrow(id: newId('r'), from: from, to: key)));
+          change(
+            () => doc.arrows.add(Arrow(id: newId('r'), from: from, to: key)),
+          );
         } else {
           notifyListeners();
         }
     }
   }
+
+  /// The link a scene key belongs to: `leg:<association>:<index>` or an arrow id.
+  static String? linkOf(String key) =>
+      key.startsWith('leg:') || key.startsWith('r-')
+      ? key
+      : (key.startsWith('seg|') || key.startsWith('bend|')
+            ? key.split('|')[1]
+            : null);
+
+  (Association, Leg)? leg(String link) {
+    final [_, id, i] = link.split(':');
+    final a = doc.associations.where((a) => a.id == id).firstOrNull,
+        n = int.parse(i);
+    return a == null || n >= a.legs.length ? null : (a, a.legs[n]);
+  }
+
+  List<Pt> _bends(String link) => link.startsWith('leg:')
+      ? leg(link)!.$2.bends
+      : doc.arrows.firstWhere((r) => r.id == link).bends;
+
+  /// Right click: on a segment (`seg|link|j`) breaks it at [p], on a break point (`bend|link|j`) removes it.
+  void toggleBend(String key, Offset p) {
+    final [kind, link, j] = key.split('|');
+    change(
+      () => kind == 'bend'
+          ? _bends(link).removeAt(int.parse(j))
+          : _bends(link).insert(int.parse(j), snap(p)),
+    );
+  }
+
+  void moveBend(String key, Offset p) {
+    final [_, link, j] = key.split('|');
+    change(() => _bends(link)[int.parse(j)] = snap(p), key);
+  }
+
+  void resizeNote(String id, Offset size) => change(
+    () => doc.notes.firstWhere((n) => n.id == id).size = snap(
+      Offset(max(60, size.dx), max(30, size.dy)),
+    ),
+    'resize:$id',
+  );
 
   /// Link tool: entity + association adds a leg, entity + entity creates the
   /// association between them, entity + enum adds an attribute of that enum.
@@ -154,11 +207,16 @@ class Controller extends ChangeNotifier {
           doc.associations.add(assoc);
           final pa = doc.layout[a]!, pb = doc.layout[b]!;
           final mid = Offset((pa.$1 + pb.$1) / 2, (pa.$2 + pb.$2) / 2);
-          doc.layout[assoc.id] = snap(a == b ? mid + const Offset(40, -100) : mid);
+          doc.layout[assoc.id] = snap(
+            a == b ? mid + const Offset(40, -100) : mid,
+          );
           selected = assoc.id;
         case 't':
           final t = doc.enums.firstWhere((x) => x.id == b);
-          doc.entities.firstWhere((x) => x.id == a).attributes.add(Attribute(name: t.name.toLowerCase(), type: 'enum:$b'));
+          doc.entities
+              .firstWhere((x) => x.id == a)
+              .attributes
+              .add(Attribute(name: t.name.toLowerCase(), type: 'enum:$b'));
       }
     });
   }
@@ -173,15 +231,19 @@ class Controller extends ChangeNotifier {
     change(() {
       var e = named;
       if (e == null) {
-        final values = [for (final v in t.split('|')) if (v.trim().isNotEmpty) v.trim()];
-        final name = a.name.isEmpty ? 'Enum' : a.name[0].toUpperCase() + a.name.substring(1);
+        final values = [
+          for (final v in t.split('|'))
+            if (v.trim().isNotEmpty) v.trim(),
+        ];
+        final name = a.name.isEmpty
+            ? 'Enum'
+            : a.name[0].toUpperCase() + a.name.substring(1);
         e = EnumType(id: newId('t'), name: name, values: values);
         doc.enums.add(e);
         final near = doc.layout[selected] ?? (0, 0);
         doc.layout[e.id] = (near.$1 + 280, near.$2);
       }
       a.type = 'enum:${e.id}';
-      revision++;
     });
   }
 
@@ -197,7 +259,6 @@ class Controller extends ChangeNotifier {
     _undo.clear();
     _redo.clear();
     changedOnDisk = false;
-    revision++;
     notifyListeners();
   }
 

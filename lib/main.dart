@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 
 import 'canvas.dart';
 import 'controller.dart';
-import 'inspector.dart';
+import 'dialogs.dart';
 import 'mld.dart';
 import 'scene.dart';
 
@@ -29,11 +29,14 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'macgram',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(colorSchemeSeed: Colors.blueGrey, visualDensity: VisualDensity.compact),
-        home: Home(c),
-      );
+    title: 'macgram',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorSchemeSeed: Colors.blueGrey,
+      visualDensity: VisualDensity.compact,
+    ),
+    home: Home(c),
+  );
 }
 
 class Home extends StatefulWidget {
@@ -64,7 +67,8 @@ class _HomeState extends State<Home> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(
-      onExitRequested: () async => await _discardOk() ? AppExitResponse.exit : AppExitResponse.cancel,
+      onExitRequested: () async =>
+          await _discardOk() ? AppExitResponse.exit : AppExitResponse.cancel,
     );
   }
 
@@ -78,7 +82,10 @@ class _HomeState extends State<Home> {
     try {
       await f();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
     }
   }
 
@@ -90,8 +97,14 @@ class _HomeState extends State<Home> {
               title: const Text('Modifications non enregistrées'),
               content: const Text('Les abandonner ?'),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Abandonner')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Annuler'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Abandonner'),
+                ),
               ],
             ),
           ) ==
@@ -102,27 +115,30 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> _open() => _guard(() async {
-        if (!await _discardOk()) return;
-        final f = await openFile(acceptedTypeGroups: const [_json]);
-        if (f != null) c.load(f.path);
-      });
+    if (!await _discardOk()) return;
+    final f = await openFile(acceptedTypeGroups: const [_json]);
+    if (f != null) c.load(f.path);
+  });
 
   Future<void> _save() => _guard(() async {
-        if (c.path != null) return c.save();
-        final loc = await getSaveLocation(suggestedName: 'modele.mcd.json', acceptedTypeGroups: const [_json]);
-        if (loc != null) c.save(loc.path);
-      });
+    if (c.path != null) return c.save();
+    final loc = await getSaveLocation(
+      suggestedName: 'modele.mcd.json',
+      acceptedTypeGroups: const [_json],
+    );
+    if (loc != null) c.save(loc.path);
+  });
 
   Future<void> _export(String ext) => _guard(() async {
-        final loc = await getSaveLocation(suggestedName: 'diagramme.$ext');
-        if (loc == null) return;
-        final scene = buildScene(c.doc, uml: c.uml);
-        if (ext == 'svg') {
-          File(loc.path).writeAsStringSync(toSvg(scene));
-        } else {
-          File(loc.path).writeAsBytesSync(await toPng(scene));
-        }
-      });
+    final loc = await getSaveLocation(suggestedName: 'diagramme.$ext');
+    if (loc == null) return;
+    final scene = buildScene(c.doc, uml: c.uml, handles: false);
+    if (ext == 'svg') {
+      File(loc.path).writeAsStringSync(toSvg(scene));
+    } else {
+      File(loc.path).writeAsBytesSync(await toPng(scene));
+    }
+  });
 
   Widget _btn(IconData icon, String tooltip, VoidCallback? onTap) =>
       IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onTap);
@@ -131,7 +147,14 @@ class _HomeState extends State<Home> {
     const sep = SizedBox(height: 24, child: VerticalDivider(width: 20));
     final hint = switch (c.tool) {
       Tool.select => '',
-      Tool.link || Tool.arrow => c.pending == null ? 'Cliquer le premier élément' : 'Cliquer le second élément',
+      Tool.link || Tool.arrow =>
+        c.pending == null
+            ? 'Cliquer le premier élément'
+            : 'Cliquer le second élément',
+      Tool.association =>
+        c.pending == null
+            ? 'Cliquer une entité (ou le vide)'
+            : 'Cliquer la seconde entité',
       _ => 'Cliquer sur le canevas pour placer',
     };
     return Material(
@@ -142,50 +165,59 @@ class _HomeState extends State<Home> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            _btn(Icons.note_add_outlined, 'Nouveau', _new),
-            _btn(Icons.folder_open, 'Ouvrir (Ctrl+O)', _open),
-            _btn(Icons.save_outlined, 'Enregistrer (Ctrl+S)', _save),
-            _btn(Icons.undo, 'Annuler (Ctrl+Z)', c.canUndo ? c.undo : null),
-            _btn(Icons.redo, 'Rétablir (Ctrl+Y)', c.canRedo ? c.redo : null),
-            sep,
-            for (final (tool, icon, label) in _tools)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: ChoiceChip(
-                  avatar: Icon(icon, size: 18),
-                  label: Text(label),
-                  showCheckmark: false,
-                  selected: c.tool == tool,
-                  onSelected: (_) => c.setTool(tool),
+          child: Row(
+            children: [
+              _btn(Icons.note_add_outlined, 'Nouveau', _new),
+              _btn(Icons.folder_open, 'Ouvrir (Ctrl+O)', _open),
+              _btn(Icons.save_outlined, 'Enregistrer (Ctrl+S)', _save),
+              _btn(Icons.undo, 'Annuler (Ctrl+Z)', c.canUndo ? c.undo : null),
+              _btn(Icons.redo, 'Rétablir (Ctrl+Y)', c.canRedo ? c.redo : null),
+              sep,
+              for (final (tool, icon, label) in _tools)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: ChoiceChip(
+                    avatar: Icon(icon, size: 18),
+                    label: Text(label),
+                    showCheckmark: false,
+                    selected: c.tool == tool,
+                    onSelected: (_) => c.setTool(tool),
+                  ),
                 ),
+              sep,
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Merise')),
+                  ButtonSegment(value: true, label: Text('UML')),
+                ],
+                selected: {c.uml},
+                onSelectionChanged: (_) => c.toggleUml(),
               ),
-            sep,
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: false, label: Text('Merise')),
-                ButtonSegment(value: true, label: Text('UML')),
-              ],
-              selected: {c.uml},
-              onSelectionChanged: (_) => c.toggleUml(),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(label: const Text('MLD'), selected: c.showMld, onSelected: (_) => c.toggleMld()),
-            PopupMenuButton<String>(
-              tooltip: 'Exporter',
-              icon: const Icon(Icons.image_outlined),
-              onSelected: _export,
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'png', child: Text('Exporter en PNG')),
-                PopupMenuItem(value: 'svg', child: Text('Exporter en SVG')),
-              ],
-            ),
-            sep,
-            Text('${c.path?.split(Platform.pathSeparator).last ?? 'sans titre'}${c.dirty ? ' •' : ''}'),
-            const SizedBox(width: 16),
-            Text(hint, style: TextStyle(color: Colors.orange.shade900)),
-          ]),
+              const SizedBox(width: 8),
+              FilterChip(
+                label: const Text('MLD'),
+                selected: c.showMld,
+                onSelected: (_) => c.toggleMld(),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Exporter',
+                icon: const Icon(Icons.image_outlined),
+                onSelected: _export,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'png', child: Text('Exporter en PNG')),
+                  PopupMenuItem(value: 'svg', child: Text('Exporter en SVG')),
+                ],
+              ),
+              _btn(Icons.help_outline, 'Aide', () => showHelp(context)),
+              sep,
+              Text(
+                '${c.path?.split(Platform.pathSeparator).last ?? 'sans titre'}${c.dirty ? ' •' : ''}',
+              ),
+              const SizedBox(width: 16),
+              Text(hint, style: TextStyle(color: Colors.orange.shade900)),
+            ],
+          ),
         ),
       ),
     );
@@ -199,46 +231,83 @@ class _HomeState extends State<Home> {
         bindings: {
           // Ctrl on Linux/Windows, Cmd on macOS.
           for (final meta in [false, true]) ...{
-            SingleActivator(LogicalKeyboardKey.keyS, control: !meta, meta: meta): _save,
-            SingleActivator(LogicalKeyboardKey.keyO, control: !meta, meta: meta): _open,
-            SingleActivator(LogicalKeyboardKey.keyZ, control: !meta, meta: meta): c.undo,
-            SingleActivator(LogicalKeyboardKey.keyY, control: !meta, meta: meta): c.redo,
-            SingleActivator(LogicalKeyboardKey.keyZ, control: !meta, meta: meta, shift: true): c.redo,
+            SingleActivator(
+              LogicalKeyboardKey.keyS,
+              control: !meta,
+              meta: meta,
+            ): _save,
+            SingleActivator(
+              LogicalKeyboardKey.keyO,
+              control: !meta,
+              meta: meta,
+            ): _open,
+            SingleActivator(
+              LogicalKeyboardKey.keyZ,
+              control: !meta,
+              meta: meta,
+            ): c.undo,
+            SingleActivator(
+              LogicalKeyboardKey.keyY,
+              control: !meta,
+              meta: meta,
+            ): c.redo,
+            SingleActivator(
+              LogicalKeyboardKey.keyZ,
+              control: !meta,
+              meta: meta,
+              shift: true,
+            ): c.redo,
           },
         },
         child: Scaffold(
-          body: Column(children: [
-            _toolbar(),
-            if (c.changedOnDisk)
-              MaterialBanner(
-                content: const Text('Le fichier a changé sur disque (git ?) alors que vous avez des modifications locales.'),
-                actions: [
-                  TextButton(onPressed: () => _guard(() async => c.load(c.path!)), child: const Text('Recharger le disque')),
-                  TextButton(onPressed: _save, child: const Text('Écraser avec ma version')),
-                ],
-              ),
-            Expanded(
-              child: Row(children: [
-                Expanded(
-                  child: Column(children: [
+          body: Column(
+            children: [
+              _toolbar(),
+              if (c.changedOnDisk)
+                MaterialBanner(
+                  content: const Text(
+                    'Le fichier a changé sur disque (git ?) alors que vous avez des modifications locales.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => _guard(() async => c.load(c.path!)),
+                      child: const Text('Recharger le disque'),
+                    ),
+                    TextButton(
+                      onPressed: _save,
+                      child: const Text('Écraser avec ma version'),
+                    ),
+                  ],
+                ),
+              Expanded(
+                child: Column(
+                  children: [
                     Expanded(child: DiagramCanvas(c)),
                     if (c.showMld)
                       Container(
                         height: 200,
                         width: double.infinity,
-                        decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.black26))),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            top: BorderSide(color: Colors.black26),
+                          ),
+                        ),
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(12),
-                          child: SelectableText(mld(c.doc), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+                          child: SelectableText(
+                            mld(c.doc),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                       ),
-                  ]),
+                  ],
                 ),
-                const VerticalDivider(width: 1),
-                SizedBox(width: 400, child: Inspector(c)),
-              ]),
-            ),
-          ]),
+              ),
+            ],
+          ),
         ),
       ),
     );
