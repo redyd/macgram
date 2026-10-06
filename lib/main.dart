@@ -56,7 +56,6 @@ const _tools = [
   (Tool.select, Icons.near_me_outlined, 'Sélection'),
   (Tool.entity, Icons.crop_square, 'Entité'),
   (Tool.association, Icons.circle_outlined, 'Association'),
-  (Tool.enumType, Icons.list, 'Enum'),
   (Tool.note, Icons.sticky_note_2_outlined, 'Note'),
   (Tool.link, Icons.link, 'Lier'),
   (Tool.arrow, Icons.arrow_right_alt, 'Flèche'),
@@ -70,8 +69,9 @@ class _HomeState extends State<Home> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(
-      onExitRequested: () async =>
-          await _discardOk() ? AppExitResponse.exit : AppExitResponse.cancel,
+      onExitRequested: () async => await _discardOk('Enregistrer et quitter')
+          ? AppExitResponse.exit
+          : AppExitResponse.cancel,
     );
   }
 
@@ -92,26 +92,134 @@ class _HomeState extends State<Home> {
     }
   }
 
-  Future<bool> _discardOk() async =>
-      !c.dirty ||
-      await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Modifications non enregistrées'),
-              content: const Text('Les abandonner ?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Annuler'),
+  /// Asks what to do with unsaved changes; true means it is safe to go on.
+  /// Saving only counts if it really happened (the file dialog can be cancelled).
+  Future<bool> _discardOk([String saveLabel = 'Enregistrer']) async {
+    if (!c.dirty) return true;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Modifications non enregistrées'),
+        content: const Text('Que faire des modifications en cours ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Abandonner'),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: Text(saveLabel),
+          ),
+        ],
+      ),
+    );
+    if (choice != 'save') return choice == 'discard';
+    await _save();
+    return !c.dirty;
+  }
+
+  /// Right-hand panel listing the enums, which are not drawn on the canvas.
+  Widget _enumPanel() {
+    final theme = Theme.of(context);
+    final pal = theme.brightness == Brightness.dark
+        ? Palette.dark
+        : Palette.light;
+    final enums = [...c.doc.enums]..sort((a, b) => a.name.compareTo(b.name));
+    return Container(
+      width: 220,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(left: BorderSide(color: theme.colorScheme.outline)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Enums', style: theme.textTheme.titleSmall),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Abandonner'),
+                _btn(
+                  Icons.add,
+                  'Nouvel enum',
+                  () => showItemDialog(context, c, c.addEnum()),
                 ),
               ],
             ),
-          ) ==
-          true;
+          ),
+          if (enums.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                'Aucun enum.\nCréez-en un ici, ou tapez a|b|c comme type d\'attribut.',
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              children: [
+                for (final e in enums)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () {
+                        c.select(e.id);
+                        showItemDialog(context, c, e.id);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Color(pal.enumType),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: c.selected == e.id
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                            width: c.selected == e.id ? 2 : 1,
+                          ),
+                        ),
+                        child: DefaultTextStyle.merge(
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            color: Color(pal.ink),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              for (final v in e.values) Text(v),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _new() async {
     if (await _discardOk()) c.newDocument();
@@ -306,31 +414,40 @@ class _HomeState extends State<Home> {
                   ],
                 ),
               Expanded(
-                child: Column(
+                child: Row(
                   children: [
-                    Expanded(child: DiagramCanvas(c)),
-                    if (c.showMld)
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border(
-                            top: BorderSide(
-                              color: Theme.of(context).colorScheme.outline,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Expanded(child: DiagramCanvas(c)),
+                          if (c.showMld)
+                            Container(
+                              height: 200,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outline,
+                                  ),
+                                ),
+                              ),
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(12),
+                                child: SelectableText(
+                                  mld(c.doc),
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(12),
-                          child: SelectableText(
-                            mld(c.doc),
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
+                    ),
+                    _enumPanel(),
                   ],
                 ),
               ),

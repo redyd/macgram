@@ -8,7 +8,8 @@ import 'model.dart';
 // clicking outside (or Esc) closes it and nothing is lost.
 
 const _help = '''
-• Entité, Enum, Note : choisir l'outil puis cliquer sur le canevas.
+• Entité, Note : choisir l'outil puis cliquer sur le canevas.
+• Enums : panneau de droite, + pour en créer, clic pour modifier.
 • Association : cliquer deux entités pour les relier (ou le vide pour une association seule).
 • Lier : ajouter une patte à une association existante, ou entité + enum → attribut de ce type.
 • Flèche : cliquer la source puis la cible.

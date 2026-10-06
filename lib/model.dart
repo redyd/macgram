@@ -224,15 +224,11 @@ class Document {
   /// Top-left position of every node, on a 10px grid.
   final layout = <String, Pt>{};
 
-  Iterable<Item> get nodes => [
-    ...enums,
-    ...entities,
-    ...associations,
-    ...notes,
-  ];
+  /// What sits on the canvas. Enums do not: they live in the side panel.
+  Iterable<Item> get nodes => [...entities, ...associations, ...notes];
 
   Item? item(String id) =>
-      [...nodes, ...arrows].where((i) => i.id == id).firstOrNull;
+      [...nodes, ...arrows, ...enums].where((i) => i.id == id).firstOrNull;
 
   String typeName(String type) => type.startsWith('enum:')
       ? enums.where((e) => e.id == type.substring(5)).firstOrNull?.name ?? '?'

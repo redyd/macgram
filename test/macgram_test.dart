@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -157,6 +159,8 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       2,
     );
     expect(uml.hit(const Offset(-500, -500)), isNull);
+    // Enums live in the side panel, not on the canvas.
+    expect(merise.hits.any((h) => h.$1 == 't-1'), isFalse);
     expect(toSvg(merise), contains('a &lt; b &amp; c'));
   });
 
@@ -351,4 +355,37 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
     await tester.pump();
     expect(a.legs.single.card, '1,1');
   });
+
+  testWidgets(
+    'unsaved changes can be saved before going on; enums are in the side panel',
+    (tester) async {
+      final c = await pumpApp(tester); // one unsaved entity
+      final file = File(
+        '${Directory.systemTemp.createTempSync('macgram').path}/t.mcd.json',
+      );
+      c.path = file.path;
+
+      await tester.tap(find.byTooltip('Nouvel enum'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fermer'));
+      await tester.pumpAndSettle();
+      expect(c.doc.enums.single.name, 'Enum');
+      expect(c.doc.layout.containsKey(c.doc.enums.single.id), isFalse);
+
+      await tester.tap(find.byTooltip('Nouveau'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(c.doc.entities.length, 1, reason: 'cancel keeps the document');
+
+      await tester.tap(find.byTooltip('Nouveau'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+      final saved = Document.decode(file.readAsStringSync());
+      expect(saved.entities.length, 1);
+      expect(saved.enums.length, 1);
+      expect(c.doc.entities, isEmpty);
+    },
+  );
 }

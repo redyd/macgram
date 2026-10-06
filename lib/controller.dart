@@ -7,7 +7,7 @@ import 'package:flutter/painting.dart' show Offset;
 
 import 'model.dart';
 
-enum Tool { select, entity, association, enumType, note, link, arrow }
+enum Tool { select, entity, association, note, link, arrow }
 
 class Controller extends ChangeNotifier {
   Document doc = Document();
@@ -124,9 +124,6 @@ class Controller extends ChangeNotifier {
         if (pending != null) return _set(() => pending = null);
         final a = Association(id: newId('a'));
         add(a, () => doc.associations.add(a));
-      case Tool.enumType:
-        final t = EnumType(id: newId('t'));
-        add(t, () => doc.enums.add(t));
       case Tool.note:
         final n = Note(id: newId('n'));
         add(n, () => doc.notes.add(n));
@@ -211,12 +208,6 @@ class Controller extends ChangeNotifier {
             a == b ? mid + const Offset(40, -100) : mid,
           );
           selected = assoc.id;
-        case 't':
-          final t = doc.enums.firstWhere((x) => x.id == b);
-          doc.entities
-              .firstWhere((x) => x.id == a)
-              .attributes
-              .add(Attribute(name: t.name.toLowerCase(), type: 'enum:$b'));
       }
     });
   }
@@ -240,11 +231,19 @@ class Controller extends ChangeNotifier {
             : a.name[0].toUpperCase() + a.name.substring(1);
         e = EnumType(id: newId('t'), name: name, values: values);
         doc.enums.add(e);
-        final near = doc.layout[selected] ?? (0, 0);
-        doc.layout[e.id] = (near.$1 + 280, near.$2);
       }
       a.type = 'enum:${e.id}';
     });
+  }
+
+  /// Adds an enum (shown in the side panel) and returns its id.
+  String addEnum() {
+    final t = EnumType(id: newId('t'));
+    change(() {
+      doc.enums.add(t);
+      selected = t.id;
+    });
+    return t.id;
   }
 
   void newDocument() {

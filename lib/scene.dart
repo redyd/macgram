@@ -245,15 +245,6 @@ Scene buildScene(
               uml ? 0 : 14,
               null,
             ),
-        for (final e in d.enums)
-          (
-            e.id,
-            e.name,
-            [for (final v in e.values) (v, '', false)],
-            pal.enumType,
-            0,
-            null,
-          ),
         for (final n in d.notes) (n.id, '', noteRows(n), pal.note, 3, n.size),
       ];
 
