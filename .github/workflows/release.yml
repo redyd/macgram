@@ -1,0 +1,89 @@
+name: Release
+
+# Un tag v* build Linux et Windows et publie une release ; le lancement manuel ne fait que les artefacts.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  # La version vient du tag (v1.2.0 → 1.2.0) ; hors tag, de pubspec.yaml.
+  VER_CMD: |
+    if [[ $GITHUB_REF == refs/tags/v* ]]; then echo "VER=${GITHUB_REF_NAME#v}"
+    else echo "VER=$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"; fi >> "$GITHUB_ENV"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Vieille glibc : le binaire tourne aussi sur les distros plus récentes.
+          - os: ubuntu-22.04
+            target: linux
+            package: tar -czf macgram-linux-x64.tar.gz -C build/linux/x64/release/bundle .
+          - os: windows-latest
+            target: windows
+            package: 7z a macgram-windows-x64.zip ./build/windows/x64/runner/Release/*
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: eval "$VER_CMD"
+        shell: bash
+      - if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - if: matrix.target == 'linux'
+        run: flutter test
+      - run: flutter build ${{ matrix.target }} --release --build-name="$VER"
+        shell: bash
+      - run: ${{ matrix.package }}
+        shell: bash
+      - if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVer=$env:VER" windows\installer.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: macgram-*
+
+  rpm:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - run: dnf install -y rpm-build ImageMagick git tar gzip
+      - uses: actions/checkout@v4
+      - run: eval "$VER_CMD"
+        shell: bash
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+      - run: |
+          mkdir -p build/linux/x64/release/bundle
+          tar -xzf macgram-linux-x64.tar.gz -C build/linux/x64/release/bundle
+          rpmbuild -bb linux/macgram.spec --define "_topdir $PWD/build/rpm" --define "src $PWD" --define "ver $VER"
+          cp build/rpm/RPMS/x86_64/*.rpm .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: macgram-*.rpm
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" macgram-* --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

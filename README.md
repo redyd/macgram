@@ -90,6 +90,14 @@ sudo dnf install build/rpm/RPMS/x86_64/macgram-*.rpm
 
 Le build du paquet demande `rpm-build` et ImageMagick (pour redimensionner `logo.png`). `dnf` installe GTK 3 si besoin, ajoute `macgram` au `PATH` et au menu d'applications. Pour désinstaller : `sudo dnf remove macgram`.
 
+### Publier une version
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+Le workflow `.github/workflows/release.yml` lance les tests, build Linux et Windows, et publie une release GitHub avec l'installeur Windows, le zip portable, le `.tar.gz` Linux et le RPM. Le numéro de version vient du tag.
+
 ## Développement
 
 ```bash
