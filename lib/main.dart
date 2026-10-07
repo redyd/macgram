@@ -51,6 +51,10 @@ class Home extends StatefulWidget {
 }
 
 const _json = XTypeGroup(label: 'MCD (.mcd.json)', extensions: ['json']);
+const _openable = XTypeGroup(
+  label: 'MCD (.mcd.json) ou Looping (.loo)',
+  extensions: ['json', 'loo'],
+);
 
 const _tools = [
   (Tool.select, Icons.near_me_outlined, 'Sélection'),
@@ -230,7 +234,7 @@ class _HomeState extends State<Home> {
 
   Future<void> _open() => _guard(() async {
     if (!await _discardOk()) return;
-    final f = await openFile(acceptedTypeGroups: const [_json]);
+    final f = await openFile(acceptedTypeGroups: const [_openable]);
     if (f != null) c.load(f.path);
   });
 

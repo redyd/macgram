@@ -111,6 +111,23 @@ void main() {
     expect(autoLayout(placed, edges).improved, isFalse);
   });
 
+  test('spacing: a wider setting spreads the same diagram further out', () {
+    final (boxes, edges) = planar['ring of 6']!;
+    double span(double spacing) {
+      final r = autoLayout(boxes, edges, spacing: spacing);
+      expect(r.after, 0);
+      expect(overlapping(boxes, r.pos), isFalse);
+      final xs = r.pos.values.map((p) => p.$1),
+          ys = r.pos.values.map((p) => p.$2);
+      return (xs.reduce(max) - xs.reduce(min) + ys.reduce(max) - ys.reduce(min))
+          .toDouble();
+    }
+
+    final tight = span(0.5), normal = span(1), wide = span(2.5);
+    expect(tight, lessThan(normal));
+    expect(normal, lessThan(wide));
+  });
+
   test('separate components and lone boxes do not land on each other', () {
     final (a, ea) = mcd(4, [(0, 1), (1, 2), (2, 3)]);
     final boxes = [

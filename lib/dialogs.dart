@@ -28,7 +28,8 @@ const _help = '''
 
 • Attributs : Entrée ajoute une ligne, Tab passe du nom au type,
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.
-• Réarranger : replace les boîtes pour limiter les croisements ; Ctrl+Z pour revenir.
+• Réarranger : replace les boîtes pour limiter les croisements, avec l'espacement
+  choisi (de compact à écarté) ; Ctrl+Z pour revenir.
 • Navigation : glisser au clic droit, molette (vertical), Maj+molette (horizontal),
   Ctrl+molette (zoom). Suppr : supprimer la sélection.''';
 
@@ -625,8 +626,13 @@ class _AttrRowState extends State<_AttrRow> {
   }
 }
 
-/// Rearranges the diagram to minimise link crossings. The search runs in an
-/// isolate so the window stays responsive; cancelling changes nothing.
+// Spacing chosen in the rearrange dialog, kept for the next time it opens,
+// and the one the diagram was last arranged with.
+var _spacing = 1.0, _arranged = 1.0;
+
+/// Rearranges the diagram to minimise link crossings, after asking how spread
+/// out it should be. The search runs in an isolate so the window stays
+/// responsive; cancelling changes nothing.
 Future<void> showRearrangeDialog(BuildContext context, Controller c) async {
   // Box sizes come from the Merise scene, where every association has a box.
   final boxes = <LBox>[
@@ -647,11 +653,16 @@ Future<void> showRearrangeDialog(BuildContext context, Controller c) async {
     builder: (_) => _RearrangeDialog(boxes, edges),
   );
   if (result == null) return;
-  if (result.improved) c.applyLayout(result.pos);
+  // A new spacing is applied even without fewer crossings: it was asked for.
+  final apply = result.improved || _spacing != _arranged;
+  if (apply) {
+    c.applyLayout(result.pos);
+    _arranged = _spacing;
+  }
   messenger.showSnackBar(
     SnackBar(
       content: Text(
-        result.improved
+        apply
             ? 'Schéma réarrangé — croisements : ${result.before} → ${result.after}. Ctrl+Z pour revenir.'
             : 'Aucun meilleur placement trouvé (croisements : ${result.before}).',
       ),
@@ -674,6 +685,7 @@ class _RearrangeDialogState extends State<_RearrangeDialog> {
   double _progress = 0;
   int? _from, _best;
   String? _error;
+  bool _running = false;
 
   @override
   void initState() {
@@ -693,10 +705,15 @@ class _RearrangeDialogState extends State<_RearrangeDialog> {
           setState(() => _error = '$message');
       }
     });
+  }
+
+  void _start() {
+    setState(() => _running = true);
     Isolate.spawn(layoutIsolate, (
       _port.sendPort,
       widget.boxes,
       widget.edges,
+      _spacing,
     ), onError: _port.sendPort).then((isolate) {
       if (mounted) {
         _isolate = isolate;
@@ -722,14 +739,36 @@ class _RearrangeDialogState extends State<_RearrangeDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LinearProgressIndicator(value: _error == null ? _progress : 0),
-          _gap,
-          Text(
-            _error ??
-                (_best == null
-                    ? 'Recherche du meilleur placement…'
-                    : 'Croisements : $_from → $_best   (${(_progress * 100).round()} %)'),
+          const Text('Espacement'),
+          Row(
+            children: [
+              const Text('Compact'),
+              Expanded(
+                child: Slider(
+                  value: _spacing,
+                  min: 0.5,
+                  max: 2.5,
+                  divisions: 8,
+                  label: '×$_spacing',
+                  onChanged: _running
+                      ? null
+                      : (v) => setState(() => _spacing = v),
+                ),
+              ),
+              const Text('Écarté'),
+            ],
           ),
+          if (_running) ...[
+            _gap,
+            LinearProgressIndicator(value: _error == null ? _progress : 0),
+            _gap,
+            Text(
+              _error ??
+                  (_best == null
+                      ? 'Recherche du meilleur placement…'
+                      : 'Croisements : $_from → $_best   (${(_progress * 100).round()} %)'),
+            ),
+          ],
         ],
       ),
     ),
@@ -738,6 +777,8 @@ class _RearrangeDialogState extends State<_RearrangeDialog> {
         onPressed: () => Navigator.pop(context),
         child: Text(_error == null ? 'Annuler' : 'Fermer'),
       ),
+      if (!_running)
+        FilledButton(onPressed: _start, child: const Text('Réarranger')),
     ],
   );
 }

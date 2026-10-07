@@ -28,6 +28,8 @@ Un fichier peut être passé en argument pour l'ouvrir au démarrage :
 macgram modele.mcd.json
 ```
 
+Les schémas [Looping](https://www.looping-mcd.fr/) (`.loo`) s'ouvrent aussi, par `Ctrl+O` ou en argument : ils sont importés comme un nouveau schéma à enregistrer en `.mcd.json`. Les règles deviennent des notes ; les types d'attributs ne sont pas repris.
+
 ## Utilisation
 
 | Outil | Geste |

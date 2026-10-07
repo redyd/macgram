@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset;
 
+import 'looping.dart';
 import 'model.dart';
 
 enum Tool { select, entity, association, note, link, arrow }
@@ -330,15 +331,23 @@ class Controller extends ChangeNotifier {
   }
 
   /// Throws if the file is unreadable or not a valid document (e.g. git conflict markers).
+  /// A Looping file (.loo) is imported as an unsaved document.
   void load(String p) {
-    final text = File(p).readAsStringSync();
-    doc = Document.decode(text);
+    final loo = p.toLowerCase().endsWith('.loo');
+    final text = loo ? '' : File(p).readAsStringSync();
+    doc = loo
+        ? importLooping(File(p).readAsBytesSync())
+        : Document.decode(text);
     _saved = text;
-    path = p;
+    path = loo ? null : p;
     selected = pending = null;
     group = {};
     _loaded();
-    _watchFile();
+    if (loo) {
+      _watch?.cancel();
+    } else {
+      _watchFile();
+    }
   }
 
   void save([String? to]) {

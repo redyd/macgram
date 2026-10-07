@@ -25,10 +25,10 @@ typedef LayoutResult = ({
 });
 
 const _wCross = 1000.0, _wOverlap = 600.0, _wThrough = 300.0;
-const _ideal = 180.0; // preferred centre-to-centre link length
+const _ideal = 180.0; // preferred centre-to-centre link length, at spacing 1
 const _wAlign = 0.4; // preference for horizontal or vertical links
 const _wGravity = 0.03; // pull towards the middle, keeps the diagram compact
-const _margin = 30.0; // free space wanted around a box
+const _margin = 30.0; // free space wanted around a box, at spacing 1
 
 class _Graph {
   final int n;
@@ -36,9 +36,13 @@ class _Graph {
   final ea = <int>[], eb = <int>[];
   late List<List<int>> inc; // edges touching each node
   double gx = 0, gy = 0; // where gravity pulls: see [centre]
+  final double ideal, margin, gap; // link length and free space, scaled
 
-  _Graph(this.n)
-    : x = Float64List(n),
+  _Graph(this.n, double spacing)
+    : ideal = _ideal * spacing,
+      margin = _margin * spacing,
+      gap = max(10.0, (2 * spacing).round() * 10.0),
+      x = Float64List(n),
       y = Float64List(n),
       w = Float64List(n),
       h = Float64List(n);
@@ -99,9 +103,9 @@ class _Graph {
 
   /// 0 when the boxes keep their margin, growing with how deep they overlap.
   double overlap(int i, int j) {
-    final ox = (w[i] + w[j]) / 2 + _margin - (x[i] - x[j]).abs();
+    final ox = (w[i] + w[j]) / 2 + margin - (x[i] - x[j]).abs();
     if (ox <= 0) return 0;
-    final oy = (h[i] + h[j]) / 2 + _margin - (y[i] - y[j]).abs();
+    final oy = (h[i] + h[j]) / 2 + margin - (y[i] - y[j]).abs();
     if (oy <= 0) return 0;
     return 1 + min(ox, oy) / 20;
   }
@@ -110,7 +114,7 @@ class _Graph {
   double length(int e) {
     final dx = (x[ea[e]] - x[eb[e]]).abs(), dy = (y[ea[e]] - y[eb[e]]).abs();
     final len = sqrt(dx * dx + dy * dy);
-    final d = (len - _ideal) / _ideal;
+    final d = (len - ideal) / ideal;
     return d * d + (len == 0 ? 0 : _wAlign * min(dx, dy) / len);
   }
 
@@ -125,7 +129,7 @@ class _Graph {
   }
 
   double gravity(int i) {
-    final dx = (x[i] - gx) / _ideal, dy = (y[i] - gy) / _ideal;
+    final dx = (x[i] - gx) / ideal, dy = (y[i] - gy) / ideal;
     return _wGravity * (dx * dx + dy * dy);
   }
 
@@ -189,7 +193,7 @@ class _Graph {
 
 /// Fruchterman–Reingold from random positions: a decent untangled start.
 void _forceStart(_Graph g, Random rnd) {
-  final n = g.n, side = sqrt(n) * _ideal * 1.2;
+  final n = g.n, side = sqrt(n) * g.ideal * 1.2;
   for (var i = 0; i < n; i++) {
     g.x[i] = rnd.nextDouble() * side;
     g.y[i] = rnd.nextDouble() * side;
@@ -208,7 +212,7 @@ void _forceStart(_Graph g, Random rnd) {
           vy = rnd.nextDouble() - 0.5;
           d = 1;
         }
-        final f = _ideal * _ideal / d / d;
+        final f = g.ideal * g.ideal / d / d;
         dx[i] += vx * f;
         dy[i] += vy * f;
         dx[j] -= vx * f;
@@ -218,7 +222,7 @@ void _forceStart(_Graph g, Random rnd) {
     for (var e = 0; e < g.ea.length; e++) {
       final a = g.ea[e], b = g.eb[e];
       final vx = g.x[a] - g.x[b], vy = g.y[a] - g.y[b];
-      final f = sqrt(vx * vx + vy * vy) / _ideal;
+      final f = sqrt(vx * vx + vy * vy) / g.ideal;
       dx[a] -= vx * f;
       dy[a] -= vy * f;
       dx[b] += vx * f;
@@ -320,13 +324,12 @@ void _tidy(_Graph g) {
     g.x[i] = snap(g.x[i] - g.w[i] / 2) + g.w[i] / 2;
     g.y[i] = snap(g.y[i] - g.h[i] / 2) + g.h[i] / 2;
   }
-  const gap = 20.0;
   for (var pass = 0; pass < 60; pass++) {
     var clean = true;
     for (var i = 0; i < g.n; i++) {
       for (var j = i + 1; j < g.n; j++) {
-        final ox = (g.w[i] + g.w[j]) / 2 + gap - (g.x[i] - g.x[j]).abs();
-        final oy = (g.h[i] + g.h[j]) / 2 + gap - (g.y[i] - g.y[j]).abs();
+        final ox = (g.w[i] + g.w[j]) / 2 + g.gap - (g.x[i] - g.x[j]).abs();
+        final oy = (g.h[i] + g.h[j]) / 2 + g.gap - (g.y[i] - g.y[j]).abs();
         if (ox <= 0 || oy <= 0) continue;
         clean = false;
         if (ox < oy) {
@@ -365,9 +368,12 @@ void _straighten(_Graph g) {
 
 /// Rearranges [boxes] linked by [edges] (pairs of box ids).
 /// [onProgress] gets a 0..1 fraction and the best crossing count so far.
+/// [spacing] scales the wanted link length and the room around boxes:
+/// below 1 packs the diagram tighter, above 1 spreads it out.
 LayoutResult autoLayout(
   List<LBox> boxes,
   List<(String, String)> edges, {
+  double spacing = 1,
   void Function(double progress, int crossings)? onProgress,
 }) {
   final index = {for (final (i, b) in boxes.indexed) b.id: i};
@@ -375,7 +381,7 @@ LayoutResult autoLayout(
 
   _Graph build(List<int> nodes) {
     final local = {for (final (i, v) in nodes.indexed) v: i};
-    final g = _Graph(nodes.length);
+    final g = _Graph(nodes.length, spacing);
     for (final (i, v) in nodes.indexed) {
       final b = boxes[v];
       g.w[i] = b.w;
@@ -500,9 +506,16 @@ LayoutResult autoLayout(
 }
 
 /// Isolate entry point: sends `(progress, crossings)` records, then the [LayoutResult].
-void layoutIsolate((SendPort, List<LBox>, List<(String, String)>) message) {
-  final (port, boxes, edges) = message;
+void layoutIsolate(
+  (SendPort, List<LBox>, List<(String, String)>, double) message,
+) {
+  final (port, boxes, edges, spacing) = message;
   port.send(
-    autoLayout(boxes, edges, onProgress: (p, cross) => port.send((p, cross))),
+    autoLayout(
+      boxes,
+      edges,
+      spacing: spacing,
+      onProgress: (p, cross) => port.send((p, cross)),
+    ),
   );
 }

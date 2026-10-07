@@ -455,6 +455,11 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       await tester.tap(find.byTooltip('Réarranger (moins de croisements)'));
       await tester.pump();
       expect(find.text('Réarrangement du schéma'), findsOneWidget);
+      // Nothing runs until the spacing is confirmed.
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'Réarranger'));
+      await tester.pump();
       expect(
         c.doc.encode(),
         tangled,
