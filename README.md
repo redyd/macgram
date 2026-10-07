@@ -35,7 +35,7 @@ Les schémas [Looping](https://www.looping-mcd.fr/) (`.loo`) s'ouvrent aussi, pa
 | Outil | Geste |
 |---|---|
 | Entité, Note | choisir l'outil, puis cliquer sur le canevas |
-| Enum | panneau de droite : `+` pour créer, clic pour modifier, glisser sur le canevas pour en poser une copie reliable à une association (ex. `0,n – 0,n`) |
+| Enum | panneau de droite : `+` pour créer, clic pour modifier, glisser sur le canevas pour en poser une copie reliable à une association (ex. `0,n – 0,n`), dont la flèche déplie les valeurs |
 | Association | cliquer deux entités pour les relier, ou le vide pour une association seule |
 | Lier | ajouter une patte à une association, ou relier deux entités (ou copies d'enum) |
 | Flèche | cliquer la source, puis la cible |

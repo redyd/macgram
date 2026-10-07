@@ -183,6 +183,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
     if (!wasSelect ||
         key == null ||
         key.startsWith('bend|') ||
+        key.startsWith('fold|') ||
         key.startsWith('resize|')) {
       return;
     }

@@ -237,6 +237,9 @@ class Document {
   /// copy id → enum id. A copy has no content, it is drawn from its enum.
   final mirrors = <String, String>{};
 
+  /// The copies that show their enum's values; the others only show its name.
+  final unfolded = <String>{};
+
   /// Top-left position of every node, on a 10px grid.
   final layout = <String, Pt>{};
 
@@ -281,6 +284,7 @@ class Document {
     final ents = {for (final e in entities) e.id};
     final enumIds = {for (final e in enums) e.id};
     mirrors.removeWhere((_, e) => !enumIds.contains(e));
+    unfolded.retainAll(mirrors.keys);
     for (final a in associations) {
       a.legs.removeWhere(
         (l) => !ents.contains(l.entityId) && !mirrors.containsKey(l.entityId),
@@ -312,6 +316,7 @@ class Document {
       'version': 1,
       'enums': sorted(enums),
       if (mirrors.isNotEmpty) 'mirrors': {for (final k in mirrors.keys.toList()..sort()) k: mirrors[k]},
+      if (unfolded.isNotEmpty) 'unfolded': unfolded.toList()..sort(),
       'entities': sorted(entities),
       'associations': sorted(associations),
       'notes': sorted(notes),
@@ -335,6 +340,7 @@ class Document {
       ..notes.addAll(l('notes').map(Note.fromJson))
       ..arrows.addAll(l('arrows').map(Arrow.fromJson));
     d.mirrors.addAll(((j['mirrors'] ?? {}) as Map).cast<String, String>());
+    d.unfolded.addAll(((j['unfolded'] ?? []) as List).cast<String>());
     ((j['layout'] ?? {}) as Map).forEach((k, v) {
       d.layout[k as String] = (
         ((v as List)[0] as num).round(),

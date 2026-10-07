@@ -635,6 +635,17 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       contains('possede(_#id_client_, _etatcommande_: EtatCommande)'),
     );
 
+    // A copy only shows the name until its arrow is clicked.
+    expect(svg, isNot(contains('>ouverte<')));
+    final c = Controller()..doc = d;
+    final fold = buildScene(d).hits.firstWhere((h) => h.$1 == 'fold|m-1');
+    c.tap(buildScene(d).hit(fold.$2.center), fold.$2.center);
+    expect(d.unfolded, {'m-1'});
+    expect(toSvg(buildScene(d, legend: true)), contains('>ouverte<'));
+    expect(Document.decode(d.encode()).unfolded, {'m-1'});
+    c.tap('fold|m-1', Offset.zero);
+    expect(d.unfolded, isEmpty);
+
     // Deleting a copy keeps the enum; deleting the enum takes its copies.
     final one = mirrored()..remove('m-1');
     expect(one.enums.length, 1);

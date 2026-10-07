@@ -152,6 +152,10 @@ class Controller extends ChangeNotifier {
     });
     switch (tool) {
       case Tool.select:
+        if (key != null && key.startsWith('fold|')) {
+          final id = key.substring(5);
+          return change(() => doc.unfolded.remove(id) || doc.unfolded.add(id));
+        }
         // A link selects its association; handles (resize…) keep the selection.
         final id = key == null ? null : (linkOf(key) ?? key);
         select(

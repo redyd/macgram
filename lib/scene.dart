@@ -117,7 +117,8 @@ class Scene {
 
   /// Clickable regions, later entries on top. Keys are item ids,
   /// `leg:<associationId>:<index>` (a cardinality or link note),
-  /// `bend|<link>|<index>` (a break point) or `resize|<noteId>`.
+  /// `bend|<link>|<index>` (a break point), `resize|<noteId>` or
+  /// `fold|<enumCopyId>` (the arrow that shows or hides the values).
   final hits = <(String, Rect)>[];
 
   /// Clickable link segments, below every region: `seg|<link>|<index>`.
@@ -285,7 +286,10 @@ Scene buildScene(
             (
               id,
               e.name,
-              [for (final v in e.values) (v, '', false)],
+              [
+                if (d.unfolded.contains(id))
+                  for (final v in e.values) (v, '', false),
+              ],
               pal.enumType,
               0,
               null,
@@ -294,7 +298,8 @@ Scene buildScene(
 
   for (final (id, title, rws, _, _, size) in nodes) {
     final chars = [
-      title.length,
+      // An enum copy keeps room for its fold arrow on both sides of the name.
+      title.length + (id.startsWith('m-') ? 4 : 0),
       for (final r in rws) r.$1.length + (r.$2.isEmpty ? 0 : r.$2.length + 2),
     ].reduce(max);
     final p = d.layout[id] ?? (0, 0);
@@ -514,6 +519,30 @@ Scene buildScene(
           Label(Offset(r.right - padX, y), row.$2, align: 1, color: pal.grey),
         );
       }
+    }
+    if (handles && id.startsWith('m-')) {
+      // Fold arrow: points down when the values are shown.
+      final c = Offset(r.right - 12, r.top + headH / 2);
+      s.shapes.add(
+        Poly(
+          d.unfolded.contains(id)
+              ? [
+                  c + const Offset(-5, -3),
+                  c + const Offset(5, -3),
+                  c + const Offset(0, 4),
+                ]
+              : [
+                  c + const Offset(-3, -5),
+                  c + const Offset(-3, 5),
+                  c + const Offset(4, 0),
+                ],
+          pal.grey,
+        ),
+      );
+      linkHits.add((
+        'fold|$id',
+        Rect.fromCenter(center: c, width: 20, height: 20),
+      ));
     }
     if (handles && id.startsWith('n-')) {
       // Resize grip in the bottom-right corner of a note.

@@ -15,7 +15,7 @@ const _help = '''
 • Entité, Note : choisir l'outil puis cliquer sur le canevas.
 • Enums : panneau de droite, + pour en créer, clic pour modifier.
   Glisser un enum sur le canevas en pose une copie, à relier comme une entité ;
-  modifier l'enum met à jour toutes ses copies.
+  sa flèche déplie les valeurs, et modifier l'enum met à jour toutes ses copies.
 • Association : cliquer deux entités pour les relier (ou le vide pour une association seule).
 • Lier : ajouter une patte à une association existante, ou relier deux entités.
 • Flèche : cliquer la source puis la cible.
