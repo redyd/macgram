@@ -130,7 +130,7 @@ class _HomeState extends State<Home> {
     return !c.dirty;
   }
 
-  /// Right-hand panel listing the enums, which are not drawn on the canvas.
+  /// Right-hand panel listing the enums. Dragging one to the canvas drops a copy.
   Widget _enumPanel() {
     final theme = Theme.of(context);
     final pal = theme.brightness == Brightness.dark
@@ -165,7 +165,7 @@ class _HomeState extends State<Home> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                'Aucun enum.\nCréez-en un ici, ou tapez\na|b|c comme type d\'attribut.',
+                'Aucun enum.\nCréez-en un ici, ou tapez\na|b|c comme type d\'attribut.\nGlissez-le sur le schéma\npour en poser une copie.',
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
@@ -176,44 +176,62 @@ class _HomeState extends State<Home> {
                 for (final e in enums)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    // The ink is drawn on this Material, so hovering shows.
-                    child: Material(
-                      color: Color(pal.enumType),
-                      clipBehavior: Clip.antiAlias,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        side: BorderSide(
-                          color: c.selected == e.id
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.outline,
-                          width: c.selected == e.id ? 1.5 : 1,
-                        ),
-                      ),
-                      child: InkWell(
-                        onTap: () {
-                          c.select(e.id);
-                          showItemDialog(context, c, e.id);
-                        },
+                    child: Draggable<String>(
+                      data: e.id,
+                      feedback: Material(
+                        color: Color(pal.enumType),
                         child: Padding(
                           padding: const EdgeInsets.all(8),
-                          child: DefaultTextStyle.merge(
+                          child: Text(
+                            e.name,
                             style: TextStyle(
                               fontFamily: monoFont,
                               fontSize: fontSize,
+                              fontWeight: FontWeight.bold,
                               color: Color(pal.ink),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  e.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      // The ink is drawn on this Material, so hovering shows.
+                      child: Material(
+                        color: Color(pal.enumType),
+                        clipBehavior: Clip.antiAlias,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          side: BorderSide(
+                            color: c.selected == e.id
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                            width: c.selected == e.id ? 1.5 : 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            c.select(e.id);
+                            showItemDialog(context, c, e.id);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: DefaultTextStyle.merge(
+                              style: TextStyle(
+                                fontFamily: monoFont,
+                                fontSize: fontSize,
+                                color: Color(pal.ink),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    e.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                for (final v in e.values) Text(v),
-                              ],
+                                  const SizedBox(height: 4),
+                                  for (final v in e.values) Text(v),
+                                ],
+                              ),
                             ),
                           ),
                         ),

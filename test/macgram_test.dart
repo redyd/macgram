@@ -593,4 +593,92 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       expect(c.doc.entities, isEmpty);
     },
   );
+
+  test('enum names are PascalCase, old files included', () {
+    expect(pascal('Mon_enum'), 'MonEnum');
+    expect(pascal('mon enum-là'), 'MonEnumLà');
+    expect(pascal('MonEnum'), 'MonEnum');
+    final d = Document.decode(
+      '{"enums": [{"id": "t-1", "name": "Mon_enum", "values": ["a"]}]}',
+    );
+    expect(d.enums.single.name, 'MonEnum');
+    expect((d.enums.single..name = 'autre nom').name, 'AutreNom');
+  });
+
+  // Client -0,n- possede -0,n- a copy of Statut.
+  Document mirrored() {
+    final d = sample()
+      ..mirrors['m-1'] = 't-1'
+      ..associations.add(
+        Association(
+          id: 'a-9',
+          name: 'possede',
+          legs: [Leg('e-cli'), Leg('m-1')],
+        ),
+      );
+    return d..prune();
+  }
+
+  test('an enum copy round-trips, draws its enum and follows it', () {
+    final d = mirrored();
+    final text = d.encode();
+    expect(text, contains('"m-1": "t-1"'));
+    expect(Document.decode(text).encode(), text);
+    expect(sample().encode(), isNot(contains('mirrors')));
+
+    d.enums.single.name = 'etat_commande';
+    final svg = toSvg(buildScene(d, legend: true));
+    // Commande.statut's type and the copy: the legend does not repeat it.
+    expect('>EtatCommande<'.allMatches(svg).length, 2);
+    expect(
+      mld(d),
+      contains('possede(_#id_client_, _etatcommande_: EtatCommande)'),
+    );
+
+    // Deleting a copy keeps the enum; deleting the enum takes its copies.
+    final one = mirrored()..remove('m-1');
+    expect(one.enums.length, 1);
+    expect(one.associations.last.legs.length, 1);
+    final none = mirrored()..remove('t-1');
+    expect(none.mirrors, isEmpty);
+    expect(none.layout.containsKey('m-1'), isFalse);
+    expect(none.associations.last.legs.length, 1);
+  });
+
+  test('mld: a max-1 leg towards an enum copy is a column of the entity', () {
+    final d = mirrored();
+    d.associations.last.legs[0].card = '0,1';
+    expect(
+      mld(d),
+      contains('Client(_id_: int, nom: string?, statut: Statut?)'),
+    );
+  });
+
+  testWidgets('dragging an enum from the panel drops a linkable copy', (
+    tester,
+  ) async {
+    final c = await pumpApp(tester);
+    final enumId = c.addEnum();
+    await tester.pump();
+    final g = await tester.startGesture(
+      tester.getCenter(find.text('Enum')),
+      kind: PointerDeviceKind.mouse,
+    );
+    final canvas = tester.getTopLeft(find.byType(DiagramCanvas));
+    await g.moveBy(const Offset(-30, 0));
+    await g.moveTo(canvas + const Offset(200, 100));
+    await g.up();
+    await tester.pump();
+    final copy = c.doc.mirrors.keys.single;
+    expect(c.doc.mirrors[copy], enumId);
+    expect(c.selected, copy);
+
+    c.setTool(Tool.link);
+    c.tap(c.doc.entities.single.id, Offset.zero);
+    c.tap(copy, Offset.zero);
+    expect(c.doc.associations.single.legs.map((l) => l.entityId), [
+      c.doc.entities.single.id,
+      copy,
+    ]);
+  });
 }

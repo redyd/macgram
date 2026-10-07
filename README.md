@@ -35,9 +35,9 @@ Les schémas [Looping](https://www.looping-mcd.fr/) (`.loo`) s'ouvrent aussi, pa
 | Outil | Geste |
 |---|---|
 | Entité, Note | choisir l'outil, puis cliquer sur le canevas |
-| Enum | panneau de droite : `+` pour créer, clic pour modifier |
+| Enum | panneau de droite : `+` pour créer, clic pour modifier, glisser sur le canevas pour en poser une copie reliable à une association (ex. `0,n – 0,n`) |
 | Association | cliquer deux entités pour les relier, ou le vide pour une association seule |
-| Lier | ajouter une patte à une association, ou entité + enum pour créer un attribut de ce type |
+| Lier | ajouter une patte à une association, ou relier deux entités (ou copies d'enum) |
 | Flèche | cliquer la source, puis la cible |
 
 - Double-clic sur un élément : ouvrir son formulaire. Cliquer en dehors ou `Échap` le ferme, les saisies sont déjà enregistrées.
@@ -63,7 +63,7 @@ Sur macOS, `Cmd` remplace `Ctrl` pour les raccourcis clavier.
 
 Les schémas sont enregistrés en JSON (`.mcd.json`), pensé pour git :
 
-- les identifiants sont aléatoires (`e-` entité, `a-` association, `t-` enum, `n-` note, `r-` flèche), donc deux branches qui ajoutent des éléments n'entrent pas en collision ;
+- les identifiants sont aléatoires (`e-` entité, `a-` association, `t-` enum, `m-` copie d'enum, `n-` note, `r-` flèche), donc deux branches qui ajoutent des éléments n'entrent pas en collision ;
 - les listes sont triées par identifiant, donc les ajouts tombent sur des lignes différentes ;
 - chaque élément tient sur une ligne, donc les diffs restent lisibles.
 

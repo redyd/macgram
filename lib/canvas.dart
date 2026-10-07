@@ -289,7 +289,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
       hover: _hover,
       pal: pal,
     );
-    return CallbackShortcuts(
+    final view = CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.delete): c.deleteSelected,
         const SingleActivator(LogicalKeyboardKey.backspace): c.deleteSelected,
@@ -389,6 +389,16 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
           ),
         ),
       ),
+    );
+    // An enum dragged from the side panel leaves a copy where it is dropped.
+    return DragTarget<String>(
+      onAcceptWithDetails: (d) => c.addMirror(
+        d.data,
+        _toScene(
+          (context.findRenderObject() as RenderBox).globalToLocal(d.offset),
+        ),
+      ),
+      builder: (_, _, _) => view,
     );
   }
 }

@@ -165,8 +165,8 @@ class Controller extends ChangeNotifier {
         final e = Entity(id: newId('e'));
         add(e, () => doc.entities.add(e));
       case Tool.association:
-        // Like Looping: click two entities to relate them. A click on empty space drops a lone association.
-        if (key != null && key.startsWith('e-')) {
+        // Like Looping: click two entities (or enum copies) to relate them. A click on empty space drops a lone association.
+        if (key != null && (key.startsWith('e-') || key.startsWith('m-'))) {
           if (pending == null) return _set(() => pending = key);
           final from = pending!;
           pending = null;
@@ -243,15 +243,16 @@ class Controller extends ChangeNotifier {
   );
 
   /// Link tool: entity + association adds a leg, entity + entity creates the
-  /// association between them, entity + enum adds an attribute of that enum.
+  /// association between them. An enum copy counts as an entity.
   void _link(String a, String b) {
-    if (a[0] != 'e') (a, b) = (b, a);
-    if (a[0] != 'e') return notifyListeners();
+    bool end(String id) => id[0] == 'e' || id[0] == 'm';
+    if (!end(a)) (a, b) = (b, a);
+    if (!end(a)) return notifyListeners();
     change(() {
       switch (b[0]) {
         case 'a':
           doc.associations.firstWhere((x) => x.id == b).legs.add(Leg(a));
-        case 'e':
+        case 'e' || 'm':
           final assoc = Association(id: newId('a'), legs: [Leg(a), Leg(b)]);
           doc.associations.add(assoc);
           final pa = doc.layout[a]!, pb = doc.layout[b]!;
@@ -313,6 +314,14 @@ class Controller extends ChangeNotifier {
     });
     return t.id;
   }
+
+  /// Places a copy of an enum on the canvas at [p].
+  void addMirror(String enumId, Offset p) => change(() {
+    final id = newId('m');
+    doc.mirrors[id] = enumId;
+    doc.layout[id] = snap(p);
+    selected = id;
+  });
 
   void newDocument() {
     _watch?.cancel();

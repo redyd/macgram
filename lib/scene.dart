@@ -220,8 +220,8 @@ Scene buildScene(
   /// Editing handles (break points, note resize grip); off for exports.
   bool handles = true,
 
-  /// Lists the enums in a column to the right of the diagram, for exports:
-  /// on screen they are in the side panel.
+  /// Lists the enums without a copy on the canvas in a column to the right of
+  /// the diagram, for exports: on screen they are in the side panel.
   bool legend = false,
 }) {
   final s = Scene(pal);
@@ -280,6 +280,16 @@ Scene buildScene(
               null,
             ),
         for (final n in d.notes) (n.id, '', noteRows(n), pal.note, 3, n.size),
+        for (final id in d.mirrors.keys)
+          if (d.item(id) case EnumType e)
+            (
+              id,
+              e.name,
+              [for (final v in e.values) (v, '', false)],
+              pal.enumType,
+              0,
+              null,
+            ),
       ];
 
   for (final (id, title, rws, _, _, size) in nodes) {
@@ -525,10 +535,14 @@ Scene buildScene(
   for (final (id, title, rws, fill, radius, _) in nodes) {
     draw(id, title, rws, fill, radius);
   }
-  if (legend && d.enums.isNotEmpty) {
+  final listed = [
+    for (final e in d.enums)
+      if (!d.mirrors.containsValue(e.id)) e,
+  ]..sort((a, b) => a.name.compareTo(b.name));
+  if (legend && listed.isNotEmpty) {
     final b = s.shapes.isEmpty ? Rect.zero : s.bounds;
     var y = b.top + 30;
-    for (final e in [...d.enums]..sort((a, b) => a.name.compareTo(b.name))) {
+    for (final e in listed) {
       final chars = [e.name, ...e.values].map((t) => t.length).reduce(max);
       final r = Rect.fromLTWH(
         b.right + 10,

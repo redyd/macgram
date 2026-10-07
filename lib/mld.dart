@@ -23,7 +23,9 @@ String mld(Document d) {
   // The leg whose entity receives the foreign key, for a binary association with a max-1 side.
   Leg? holder(Association a) {
     if (a.legs.length != 2) return null;
-    final ones = a.legs.where((l) => l.maxOne).toList();
+    final ones = a.legs
+        .where((l) => l.maxOne && ents.containsKey(l.entityId))
+        .toList();
     if (ones.isEmpty) return null;
     return ones.firstWhere((l) => l.card == '1,1', orElse: () => ones.first);
   }
@@ -44,6 +46,18 @@ String mld(Document d) {
   _Col attr(Attribute a) =>
       _Col(a.name, d.typeName(a.type), pk: a.isId, nullable: a.nullable);
 
+  // A leg to an enum copy gives a column of that enum, not a foreign key.
+  _Col? enumCol(Leg l, {bool pk = false, bool nullable = false}) =>
+      switch (d.item(l.entityId)) {
+        EnumType t => _Col(
+          t.name.toLowerCase(),
+          t.name,
+          pk: pk,
+          nullable: nullable,
+        ),
+        _ => null,
+      };
+
   // `seen` stops reflexive associations and weak-entity cycles from recursing forever.
   List<_Col> cols(String id, Set<String> seen) {
     final out = ents[id]!.attributes.map(attr).toList();
@@ -51,18 +65,24 @@ String mld(Document d) {
     for (final a in d.associations) {
       final h = holder(a);
       if (h == null || h.entityId != id) continue;
-      final other = ents[a.legs.firstWhere((l) => !identical(l, h)).entityId]!;
-      for (final c in cols(other.id, {...seen, id}).where((c) => c.pk)) {
-        add(
-          out,
-          _Col(
-            fkName(c.name, other),
-            null,
-            pk: h.relative,
-            fk: true,
-            nullable: h.card.startsWith('0'),
-          ),
-        );
+      final far = a.legs.firstWhere((l) => !identical(l, h));
+      final nullable = h.card.startsWith('0');
+      if (enumCol(far, nullable: nullable) case final c?) {
+        add(out, c);
+      } else {
+        final other = ents[far.entityId]!;
+        for (final c in cols(other.id, {...seen, id}).where((c) => c.pk)) {
+          add(
+            out,
+            _Col(
+              fkName(c.name, other),
+              null,
+              pk: h.relative,
+              fk: true,
+              nullable: nullable,
+            ),
+          );
+        }
       }
       for (final x in a.attributes) {
         add(out, attr(x));
@@ -84,6 +104,10 @@ String mld(Document d) {
     if (holder(a) != null || a.legs.isEmpty) continue;
     final out = <_Col>[];
     for (final l in a.legs) {
+      if (enumCol(l, pk: true) case final c?) {
+        add(out, c);
+        continue;
+      }
       for (final c in cols(l.entityId, {}).where((c) => c.pk)) {
         add(
           out,

@@ -18,7 +18,8 @@ final _rnd = Random();
 
 /// Ids are random, not counters: two git branches adding elements never collide,
 /// and since lists are saved sorted by id, additions land on different lines.
-/// The prefix gives the kind: e entity, a association, t enum, n note, r arrow.
+/// The prefix gives the kind: e entity, a association, t enum, m enum copy,
+/// n note, r arrow.
 String newId(String prefix) =>
     '$prefix-${List.generate(6, (_) => 'abcdefghijklmnopqrstuvwxyz0123456789'[_rnd.nextInt(36)]).join()}';
 
@@ -71,17 +72,27 @@ List<Attribute> _attrs(Map j) => [
   for (final a in (j['attributes'] ?? []) as List) Attribute.fromJson(a as Map),
 ];
 
+/// Enum names are PascalCase: `Mon_enum` and `mon enum` become `MonEnum`.
+String pascal(String s) => s
+    .split(RegExp(r'[_\s-]+'))
+    .where((w) => w.isNotEmpty)
+    .map((w) => w[0].toUpperCase() + w.substring(1))
+    .join();
+
 class EnumType extends Item {
   @override
   final String id;
-  String name;
+  String _name;
   List<String> values;
-  EnumType({required this.id, this.name = 'Enum', List<String>? values})
-    : values = values ?? ['A', 'B'];
+  EnumType({required this.id, String name = 'Enum', List<String>? values})
+    : _name = pascal(name),
+      values = values ?? ['A', 'B'];
   EnumType.fromJson(Map j)
     : id = j['id'] as String,
-      name = j['name'] as String,
+      _name = pascal(j['name'] as String),
       values = (j['values'] as List).cast<String>().toList();
+  String get name => _name;
+  set name(String v) => _name = pascal(v);
   @override
   Map<String, Object?> toJson() => {'id': id, 'name': name, 'values': values};
 }
@@ -107,6 +118,7 @@ class Entity extends Item {
 }
 
 class Leg {
+  /// The entity on this leg, or an enum copy (see [Document.mirrors]).
   String entityId, card, note;
 
   /// Break points of the link, from the association to the entity.
@@ -221,14 +233,30 @@ class Document {
   final notes = <Note>[];
   final arrows = <Arrow>[];
 
+  /// Copies of enums placed on the canvas so associations can reach them:
+  /// copy id → enum id. A copy has no content, it is drawn from its enum.
+  final mirrors = <String, String>{};
+
   /// Top-left position of every node, on a 10px grid.
   final layout = <String, Pt>{};
 
-  /// What sits on the canvas. Enums do not: they live in the side panel.
+  /// The items on the canvas. Enums live in the side panel; only their
+  /// copies are on the canvas.
   Iterable<Item> get nodes => [...entities, ...associations, ...notes];
 
-  Item? item(String id) =>
-      [...nodes, ...arrows, ...enums].where((i) => i.id == id).firstOrNull;
+  /// An enum copy resolves to its enum.
+  Item? item(String id) => [
+    ...nodes,
+    ...arrows,
+    ...enums,
+  ].where((i) => i.id == (mirrors[id] ?? id)).firstOrNull;
+
+  /// Name of what a leg is attached to.
+  String endName(String id) => switch (item(id)) {
+    Entity e => e.name,
+    EnumType t => t.name,
+    _ => '?',
+  };
 
   String typeName(String type) => type.startsWith('enum:')
       ? enums.where((e) => e.id == type.substring(5)).firstOrNull?.name ?? '?'
@@ -244,6 +272,7 @@ class Document {
     ]) {
       l.removeWhere((i) => i.id == id);
     }
+    mirrors.remove(id);
     prune();
   }
 
@@ -251,8 +280,11 @@ class Document {
   void prune() {
     final ents = {for (final e in entities) e.id};
     final enumIds = {for (final e in enums) e.id};
+    mirrors.removeWhere((_, e) => !enumIds.contains(e));
     for (final a in associations) {
-      a.legs.removeWhere((l) => !ents.contains(l.entityId));
+      a.legs.removeWhere(
+        (l) => !ents.contains(l.entityId) && !mirrors.containsKey(l.entityId),
+      );
     }
     for (final a in [
       ...entities.expand((e) => e.attributes),
@@ -263,7 +295,7 @@ class Document {
         a.type = 'string';
       }
     }
-    final ids = {for (final n in nodes) n.id};
+    final ids = {for (final n in nodes) n.id, ...mirrors.keys};
     arrows.removeWhere((r) => !ids.contains(r.from) || !ids.contains(r.to));
     layout.removeWhere((k, _) => !ids.contains(k));
     for (final id in ids) {
@@ -279,6 +311,7 @@ class Document {
     return '${_fmt({
       'version': 1,
       'enums': sorted(enums),
+      if (mirrors.isNotEmpty) 'mirrors': {for (final k in mirrors.keys.toList()..sort()) k: mirrors[k]},
       'entities': sorted(entities),
       'associations': sorted(associations),
       'notes': sorted(notes),
@@ -301,6 +334,7 @@ class Document {
       ..associations.addAll(l('associations').map(Association.fromJson))
       ..notes.addAll(l('notes').map(Note.fromJson))
       ..arrows.addAll(l('arrows').map(Arrow.fromJson));
+    d.mirrors.addAll(((j['mirrors'] ?? {}) as Map).cast<String, String>());
     ((j['layout'] ?? {}) as Map).forEach((k, v) {
       d.layout[k as String] = (
         ((v as List)[0] as num).round(),

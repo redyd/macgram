@@ -14,8 +14,10 @@ import 'scene.dart';
 const _help = '''
 • Entité, Note : choisir l'outil puis cliquer sur le canevas.
 • Enums : panneau de droite, + pour en créer, clic pour modifier.
+  Glisser un enum sur le canevas en pose une copie, à relier comme une entité ;
+  modifier l'enum met à jour toutes ses copies.
 • Association : cliquer deux entités pour les relier (ou le vide pour une association seule).
-• Lier : ajouter une patte à une association existante, ou entité + enum → attribut de ce type.
+• Lier : ajouter une patte à une association existante, ou relier deux entités.
 • Flèche : cliquer la source puis la cible.
 
 • Double-clic sur un élément : ouvrir son formulaire.
@@ -134,11 +136,7 @@ Future<void> showItemDialog(
           for (final l in a.legs)
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    c.doc.entities.firstWhere((e) => e.id == l.entityId).name,
-                  ),
-                ),
+                Expanded(child: Text(c.doc.endName(l.entityId))),
                 _cards(c, l),
                 Tooltip(
                   message: 'Identifiant relatif (entité faible)',
@@ -239,7 +237,7 @@ Future<void> showLegDialog(
   final found = c.leg(link);
   if (found == null) return;
   final (a, l) = found;
-  final entity = c.doc.entities.firstWhere((e) => e.id == l.entityId).name;
+  final entity = c.doc.endName(l.entityId);
   await _popup(
     context,
     c,
