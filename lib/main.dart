@@ -55,7 +55,7 @@ const _json = XTypeGroup(label: 'MCD (.mcd.json)', extensions: ['json']);
 const _tools = [
   (Tool.select, Icons.near_me_outlined, 'Sélection'),
   (Tool.entity, Icons.crop_square, 'Entité'),
-  (Tool.association, Icons.circle_outlined, 'Association'),
+  (Tool.association, Icons.hub_outlined, 'Association'),
   (Tool.note, Icons.sticky_note_2_outlined, 'Note'),
   (Tool.link, Icons.linear_scale, 'Lier'),
   (Tool.arrow, Icons.north_east, 'Flèche'),

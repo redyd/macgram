@@ -34,16 +34,16 @@ ThemeData appTheme(Brightness brightness) {
 
   return ThemeData(
     fontFamily: uiFont,
-    // Desktop scale: 13 px body, where Material defaults to 14–16.
+    // Desktop scale: 14 px body, where Material defaults to 14–16.
     textTheme: TextTheme(
-      bodyLarge: text(13),
-      bodyMedium: text(13),
-      bodySmall: text(12, FontWeight.w400, muted),
-      labelLarge: text(13, FontWeight.w500),
-      labelMedium: text(11.5, FontWeight.w500, muted),
-      titleLarge: text(16, FontWeight.w600),
-      titleMedium: text(14, FontWeight.w600),
-      titleSmall: text(13, FontWeight.w600),
+      bodyLarge: text(14),
+      bodyMedium: text(14),
+      bodySmall: text(13, FontWeight.w400, muted),
+      labelLarge: text(14, FontWeight.w500),
+      labelMedium: text(12.5, FontWeight.w500, muted),
+      titleLarge: text(17, FontWeight.w600),
+      titleMedium: text(15, FontWeight.w600),
+      titleSmall: text(14, FontWeight.w600),
     ),
     colorScheme: ColorScheme(
       brightness: brightness,
@@ -76,15 +76,15 @@ ThemeData appTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       elevation: 16,
       shape: panel,
-      titleTextStyle: text(15, FontWeight.w600).copyWith(fontFamily: uiFont),
-      contentTextStyle: text(13).copyWith(fontFamily: uiFont),
+      titleTextStyle: text(16, FontWeight.w600).copyWith(fontFamily: uiFont),
+      contentTextStyle: text(14).copyWith(fontFamily: uiFont),
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: bg,
       surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: panel,
-      textStyle: text(13).copyWith(fontFamily: uiFont),
+      textStyle: text(14).copyWith(fontFamily: uiFont),
     ),
     tooltipTheme: TooltipThemeData(
       waitDuration: const Duration(milliseconds: 400),
@@ -96,7 +96,7 @@ ThemeData appTheme(Brightness brightness) {
       textStyle: const TextStyle(
         fontFamily: uiFont,
         color: Colors.white,
-        fontSize: 12,
+        fontSize: 13,
       ),
     ),
     snackBarTheme: SnackBarThemeData(
@@ -108,7 +108,7 @@ ThemeData appTheme(Brightness brightness) {
       contentTextStyle: const TextStyle(
         fontFamily: uiFont,
         color: Colors.white,
-        fontSize: 13,
+        fontSize: 14,
       ),
     ),
     scrollbarTheme: ScrollbarThemeData(

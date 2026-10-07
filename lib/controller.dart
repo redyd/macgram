@@ -14,6 +14,14 @@ class Controller extends ChangeNotifier {
   Tool tool = Tool.select;
   String? path, selected;
 
+  /// Boxes selected together (rubber band, Ctrl+A); [selected] is then null.
+  Set<String> group = {};
+
+  // Where the group's boxes and the break points between them were when a
+  // group drag started, with the live lists to write back to.
+  Map<String, Pt> _boxes0 = {};
+  List<(List<Pt>, List<Pt>)> _bends0 = [];
+
   /// First element clicked with the link or arrow tool.
   String? pending;
   bool uml = false, showMld = false;
@@ -41,8 +49,47 @@ class Controller extends ChangeNotifier {
   });
   void select(String? id) => _set(() {
     selected = id;
+    group = {};
     _tag = null;
   });
+
+  /// Selects several boxes at once; a single one is a plain selection.
+  void selectGroup(Set<String> ids) => _set(() {
+    selected = ids.length == 1 ? ids.single : null;
+    group = ids.length > 1 ? ids : {};
+    _tag = null;
+  });
+  void selectAll() => selectGroup(doc.layout.keys.toSet());
+
+  void startGroupMove() {
+    _boxes0 = {for (final id in group) id: doc.layout[id]!};
+    _bends0 = [
+      for (final a in doc.associations)
+        for (final l in a.legs)
+          if (group.contains(a.id) && group.contains(l.entityId))
+            (l.bends, [...l.bends]),
+      for (final r in doc.arrows)
+        if (group.contains(r.from) && group.contains(r.to))
+          (r.bends, [...r.bends]),
+    ];
+  }
+
+  /// Moves the whole group by [delta] from where the drag started. The delta
+  /// is snapped, not each box, so the boxes keep their relative positions.
+  void moveGroup(Offset delta) {
+    final (dx, dy) = snap(delta);
+    change(() {
+      for (final MapEntry(:key, value: (x, y)) in _boxes0.entries) {
+        doc.layout[key] = (x + dx, y + dy);
+      }
+      for (final (live, from) in _bends0) {
+        for (final (i, (x, y)) in from.indexed) {
+          live[i] = (x + dx, y + dy);
+        }
+      }
+    }, 'move:group');
+  }
+
   void toggleUml() => _set(() => uml = !uml);
   void toggleMld() => _set(() => showMld = !showMld);
   void endCoalesce() => _tag = null;
@@ -65,6 +112,7 @@ class Controller extends ChangeNotifier {
     to.add(doc.encode());
     doc = Document.decode(from.removeLast());
     selected = pending = _tag = null;
+    group = {};
     notifyListeners();
   }
 
@@ -78,16 +126,19 @@ class Controller extends ChangeNotifier {
       change(() => doc.layout[id] = snap(p), 'move:$id');
 
   void deleteSelected() {
-    if (selected == null) return;
+    final ids = {...group, ?selected};
+    if (ids.isEmpty) return;
     change(() {
-      doc.remove(selected!);
+      ids.forEach(doc.remove);
       selected = null;
+      group = {};
     });
   }
 
   void cancel() => _set(() {
     tool = Tool.select;
     pending = selected = null;
+    group = {};
   });
 
   /// A click on the canvas: [key] is what was hit (see Scene.hits), [p] the scene position.
@@ -267,6 +318,7 @@ class Controller extends ChangeNotifier {
     doc = Document();
     _saved = doc.encode();
     path = selected = pending = null;
+    group = {};
     _loaded();
   }
 
@@ -284,6 +336,7 @@ class Controller extends ChangeNotifier {
     _saved = text;
     path = p;
     selected = pending = null;
+    group = {};
     _loaded();
     _watchFile();
   }

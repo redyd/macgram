@@ -10,7 +10,7 @@ import 'model.dart';
 // Text is not measured: the bundled diagram font is monospace, every character
 // advances 0.6 em.
 const monoFont = 'JetBrains Mono';
-const fontSize = 13.0, charW = fontSize * 0.6;
+const fontSize = 14.0, charW = fontSize * 0.6;
 const rowH = 20.0, headH = 28.0, padX = 12.0;
 
 /// Outline widths: resting, and selected or pending.
@@ -208,6 +208,9 @@ Scene buildScene(
   Document d, {
   bool uml = false,
   String? selected,
+
+  /// Boxes selected together, drawn like [selected].
+  Set<String> group = const {},
   String? pending,
 
   /// Box under the pointer, outlined in the selection colour.
@@ -224,7 +227,7 @@ Scene buildScene(
   final s = Scene(pal);
   final rects = <String, Rect>{};
   final linkHits = <(String, Rect)>[];
-  int stroke(String id) => id == selected || id == hover
+  int stroke(String id) => id == selected || id == hover || group.contains(id)
       ? pal.sel
       : (id == pending ? pal.pend : pal.ink);
 
@@ -455,7 +458,7 @@ Scene buildScene(
 
   void draw(String id, String title, List<_Row> rws, int fill, double radius) {
     final r = rects[id]!;
-    final hot = id == selected || id == pending;
+    final hot = id == selected || id == pending || group.contains(id);
     s.shapes.add(
       Box(
         r,

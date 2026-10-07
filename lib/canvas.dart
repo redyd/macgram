@@ -93,7 +93,10 @@ class _Painter extends CustomPainter {
   final Scene scene;
   final Offset pan;
   final double zoom;
-  _Painter(this.scene, this.pan, this.zoom, this.pal);
+
+  /// Rubber band being drawn, in scene coordinates.
+  final Rect? band;
+  _Painter(this.scene, this.pan, this.zoom, this.pal, this.band);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -118,6 +121,17 @@ class _Painter extends CustomPainter {
       ..translate(pan.dx, pan.dy)
       ..scale(zoom);
     paintScene(canvas, scene);
+    if (band case final band?) {
+      canvas
+        ..drawRect(band, Paint()..color = Color(pal.sel).withValues(alpha: 0.1))
+        ..drawRect(
+          band,
+          Paint()
+            ..color = Color(pal.sel)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1 / zoom,
+        );
+    }
   }
 
   @override
@@ -140,6 +154,13 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
   double _zoom = 1;
   String? _down, _drag, _lastTap, _hover;
   bool _panning = false;
+
+  // Rubber-band selection: where the left button went down on empty canvas,
+  // and where the pointer is now (scene coordinates).
+  Offset _downAt = Offset.zero;
+  Offset? _bandFrom, _bandTo;
+  Rect? get _band =>
+      _bandFrom == null ? null : Rect.fromPoints(_bandFrom!, _bandTo!);
   DateTime _lastTapAt = DateTime(0);
   Timer? _legTimer;
   MouseCursor _cursor = SystemMouseCursors.basic;
@@ -192,8 +213,14 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
 
   void _dragStart() {
     final key = _down;
-    if (c.tool != Tool.select || key == null) return;
-    if (key.startsWith('bend|')) {
+    if (c.tool != Tool.select) return;
+    if (key == null) {
+      setState(() => _bandFrom = _bandTo = _downAt);
+      return;
+    }
+    if (c.group.contains(key)) {
+      c.startGroupMove();
+    } else if (key.startsWith('bend|')) {
       _raw = _scene.hits.firstWhere((h) => h.$1 == key).$2.center;
     } else if (key.startsWith('resize|')) {
       final r = _scene.hits.firstWhere((h) => h.$1 == key.substring(7)).$2;
@@ -207,11 +234,21 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
     _drag = key;
   }
 
-  void _dragUpdate(Offset delta) => setState(() {
+  void _dragUpdate(Offset delta, Offset at) => setState(() {
+    if (_bandFrom != null) {
+      _bandTo = at;
+      c.selectGroup({
+        for (final (id, r) in _scene.hits)
+          if (c.doc.layout.containsKey(id) && r.overlaps(_band!)) id,
+      });
+      return;
+    }
     final key = _drag;
     if (key == null) return;
     _raw += delta / _zoom;
-    if (key.startsWith('bend|')) {
+    if (c.group.contains(key)) {
+      c.moveGroup(at - _downAt);
+    } else if (key.startsWith('bend|')) {
       c.moveBend(key, _raw);
     } else if (key.startsWith('resize|')) {
       c.resizeNote(key.substring(7), _raw);
@@ -247,6 +284,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
       c.doc,
       uml: c.uml,
       selected: c.selected,
+      group: c.group,
       pending: c.pending,
       hover: _hover,
       pal: pal,
@@ -256,6 +294,9 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
         const SingleActivator(LogicalKeyboardKey.delete): c.deleteSelected,
         const SingleActivator(LogicalKeyboardKey.backspace): c.deleteSelected,
         const SingleActivator(LogicalKeyboardKey.escape): c.cancel,
+        const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+            c.selectAll,
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true): c.selectAll,
       },
       child: Focus(
         focusNode: _focus,
@@ -308,11 +349,14 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
                 c.toggleBend(key, p);
               }
             },
-            onPanDown: (d) => _down = _scene.hit(_toScene(d.localPosition)),
+            onPanDown: (d) {
+              _downAt = _toScene(d.localPosition);
+              _down = _scene.hit(_downAt);
+            },
             onPanStart: (_) => _dragStart(),
-            onPanUpdate: (d) => _dragUpdate(d.delta),
+            onPanUpdate: (d) => _dragUpdate(d.delta, _toScene(d.localPosition)),
             onPanEnd: (_) {
-              setState(() => _drag = null);
+              setState(() => _drag = _bandFrom = _bandTo = null);
               c.endCoalesce();
             },
             child: MouseRegion(
@@ -337,7 +381,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
               child: ColoredBox(
                 color: Color(pal.canvas),
                 child: CustomPaint(
-                  painter: _Painter(_scene, _pan, _zoom, pal),
+                  painter: _Painter(_scene, _pan, _zoom, pal, _band),
                   size: Size.infinite,
                 ),
               ),

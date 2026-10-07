@@ -23,6 +23,8 @@ const _help = '''
 • Clic droit sur un lien ou une flèche : ajouter un point de cassure, déplaçable.
   Clic droit sur le point : le retirer.
 • Coin bas-droit d'une note : la redimensionner.
+• Glisser sur le fond : tracer un cadre pour sélectionner plusieurs éléments,
+  puis les déplacer ensemble ou les supprimer. Ctrl+A : tout sélectionner.
 
 • Attributs : Entrée ajoute une ligne, Tab passe du nom au type,
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.

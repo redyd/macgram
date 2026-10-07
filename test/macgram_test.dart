@@ -533,4 +533,59 @@ concerne(_#numero_ligne_, _#id_commande_ligne_, _#ref_produit_, quantite: int)''
       );
     },
   );
+
+  testWidgets(
+    'rubber band selects the boxes it touches; they move and delete together, Ctrl+A takes all',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = Controller();
+      await tester.pumpWidget(App(c));
+      final origin = tester.getTopLeft(find.byType(DiagramCanvas));
+      for (final at in const [
+        Offset(100, 100),
+        Offset(300, 100),
+        Offset(700, 500),
+      ]) {
+        c.setTool(Tool.entity);
+        c.tap(null, at);
+      }
+      c.select(null);
+      await tester.pump();
+      final [a, b, far] = c.doc.entities.map((e) => e.id).toList();
+
+      Future<void> drag(Offset from, Offset by) async {
+        final g = await tester.startGesture(
+          origin + from,
+          kind: PointerDeviceKind.mouse,
+        );
+        await g.moveBy(by / 2);
+        await g.moveBy(by / 2);
+        await g.up();
+        await tester.pump();
+      }
+
+      await drag(const Offset(20, 40), const Offset(400, 200));
+      expect(c.group, {a, b});
+
+      final before = Map.of(c.doc.layout);
+      await drag(
+        const Offset(60, 100),
+        const Offset(50, 30),
+      ); // grab one of them
+      expect(c.doc.layout[a], (before[a]!.$1 + 50, before[a]!.$2 + 30));
+      expect(c.doc.layout[b], (before[b]!.$1 + 50, before[b]!.$2 + 30));
+      expect(c.doc.layout[far], before[far]);
+      c.undo(); // the whole drag is one step
+      expect(c.doc.layout, before);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(c.group, {a, b, far});
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      expect(c.doc.entities, isEmpty);
+    },
+  );
 }
