@@ -57,8 +57,8 @@ const _tools = [
   (Tool.entity, Icons.crop_square, 'Entité'),
   (Tool.association, Icons.circle_outlined, 'Association'),
   (Tool.note, Icons.sticky_note_2_outlined, 'Note'),
-  (Tool.link, Icons.link, 'Lier'),
-  (Tool.arrow, Icons.arrow_right_alt, 'Flèche'),
+  (Tool.link, Icons.linear_scale, 'Lier'),
+  (Tool.arrow, Icons.north_east, 'Flèche'),
 ];
 
 class _HomeState extends State<Home> {
@@ -161,7 +161,7 @@ class _HomeState extends State<Home> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                'Aucun enum.\nCréez-en un ici, ou tapez a|b|c comme type d\'attribut.',
+                'Aucun enum.\nCréez-en un ici, ou tapez\na|b|c comme type d\'attribut.',
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
@@ -172,42 +172,45 @@ class _HomeState extends State<Home> {
                 for (final e in enums)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () {
-                        c.select(e.id);
-                        showItemDialog(context, c, e.id);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Color(pal.enumType),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: c.selected == e.id
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.outline,
-                            width: c.selected == e.id ? 2 : 1,
-                          ),
+                    // The ink is drawn on this Material, so hovering shows.
+                    child: Material(
+                      color: Color(pal.enumType),
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        side: BorderSide(
+                          color: c.selected == e.id
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
+                          width: c.selected == e.id ? 1.5 : 1,
                         ),
-                        child: DefaultTextStyle.merge(
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            color: Color(pal.ink),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                e.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          c.select(e.id);
+                          showItemDialog(context, c, e.id);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: DefaultTextStyle.merge(
+                            style: TextStyle(
+                              fontFamily: monoFont,
+                              fontSize: fontSize,
+                              color: Color(pal.ink),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  e.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              for (final v in e.values) Text(v),
-                            ],
+                                const SizedBox(height: 4),
+                                for (final v in e.values) Text(v),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -339,13 +342,13 @@ class _HomeState extends State<Home> {
               const SizedBox(width: 8),
               _toggle('MLD', c.showMld, c.toggleMld),
               _btn(
-                Icons.auto_fix_high,
+                Icons.account_tree_outlined,
                 'Réarranger (moins de croisements)',
                 () => showRearrangeDialog(context, c),
               ),
               PopupMenuButton<String>(
                 tooltip: 'Exporter',
-                icon: const Icon(Icons.image_outlined),
+                icon: const Icon(Icons.file_download_outlined),
                 onSelected: _export,
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'png', child: Text('Exporter en PNG')),
@@ -360,8 +363,22 @@ class _HomeState extends State<Home> {
               _btn(Icons.help_outline, 'Aide', () => showHelp(context)),
               sep,
               Text(
-                '${c.path?.split(Platform.pathSeparator).last ?? 'sans titre'}${c.dirty ? ' •' : ''}',
+                c.path?.split(Platform.pathSeparator).last ?? 'sans titre',
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
+              if (c.dirty)
+                Tooltip(
+                  message: 'Modifications non enregistrées',
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(left: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
               const SizedBox(width: 16),
               Text(hint, style: TextStyle(color: theme.colorScheme.primary)),
             ],
@@ -439,6 +456,9 @@ class _HomeState extends State<Home> {
                               height: 200,
                               width: double.infinity,
                               decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerLowest,
                                 border: Border(
                                   top: BorderSide(
                                     color: Theme.of(context)
@@ -452,8 +472,9 @@ class _HomeState extends State<Home> {
                                 child: SelectableText(
                                   mld(c.doc),
                                   style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
+                                    fontFamily: monoFont,
+                                    fontSize: fontSize,
+                                    height: 1.5,
                                   ),
                                 ),
                               ),

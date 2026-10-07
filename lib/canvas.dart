@@ -30,13 +30,14 @@ void paintScene(Canvas canvas, Scene s) {
               ..style = PaintingStyle.stroke
               ..strokeWidth = strokeWidth,
           );
-      case Line(:final a, :final b, :final color):
+      case Line(:final a, :final b, :final color, :final width):
         canvas.drawLine(
           a,
           b,
           Paint()
             ..color = Color(color)
-            ..strokeWidth = 1.2,
+            ..strokeWidth = width
+            ..strokeCap = StrokeCap.round,
         );
       case Poly(:final points, :final fill):
         canvas.drawPath(
@@ -56,15 +57,12 @@ void paintScene(Canvas canvas, Scene s) {
           text: TextSpan(
             text: text,
             style: TextStyle(
-              fontFamily: 'monospace',
-              fontFamilyFallback: const [
-                'DejaVu Sans Mono',
-                'Consolas',
-                'Menlo',
-              ],
+              fontFamily: monoFont,
               fontSize: fontSize,
               color: Color(color),
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              // Explicit axis value: the bundled font is a variable font.
+              fontVariations: [ui.FontVariation.weight(bold ? 700 : 400)],
               decoration: underline ? TextDecoration.underline : null,
             ),
           ),
@@ -140,7 +138,8 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
   final _focus = FocusNode();
   Offset _pan = Offset.zero, _raw = Offset.zero;
   double _zoom = 1;
-  String? _down, _drag, _lastTap;
+  String? _down, _drag, _lastTap, _hover;
+  bool _panning = false;
   DateTime _lastTapAt = DateTime(0);
   Timer? _legTimer;
   MouseCursor _cursor = SystemMouseCursors.basic;
@@ -234,7 +233,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
       return SystemMouseCursors.resizeUpLeftDownRight;
     }
     if (key.startsWith('bend|') || c.doc.layout.containsKey(key)) {
-      return SystemMouseCursors.move;
+      return SystemMouseCursors.grab;
     }
     return SystemMouseCursors.click;
   }
@@ -249,6 +248,7 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
       uml: c.uml,
       selected: c.selected,
       pending: c.pending,
+      hover: _hover,
       pal: pal,
     );
     return CallbackShortcuts(
@@ -266,8 +266,17 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
           // Shift+scroll horizontally, Ctrl+scroll to zoom on the cursor.
           onPointerMove: (e) {
             if (e.buttons & kSecondaryMouseButton != 0) {
-              setState(() => _pan += e.delta);
+              setState(() {
+                _pan += e.delta;
+                _panning = true;
+              });
             }
+          },
+          onPointerUp: (_) {
+            if (_panning) setState(() => _panning = false);
+          },
+          onPointerCancel: (_) {
+            if (_panning) setState(() => _panning = false);
           },
           onPointerSignal: (e) {
             if (e is! PointerScrollEvent) return;
@@ -303,14 +312,27 @@ class _DiagramCanvasState extends State<DiagramCanvas> {
             onPanStart: (_) => _dragStart(),
             onPanUpdate: (d) => _dragUpdate(d.delta),
             onPanEnd: (_) {
-              _drag = null;
+              setState(() => _drag = null);
               c.endCoalesce();
             },
             child: MouseRegion(
-              cursor: _cursor,
+              // A drag in progress wins over what is under the pointer.
+              cursor: _panning || _drag != null
+                  ? SystemMouseCursors.grabbing
+                  : _cursor,
               onHover: (e) {
                 final cursor = _cursorAt(e.localPosition);
-                if (cursor != _cursor) setState(() => _cursor = cursor);
+                final key = _scene.hit(_toScene(e.localPosition));
+                final hover = c.doc.layout.containsKey(key) ? key : null;
+                if (cursor != _cursor || hover != _hover) {
+                  setState(() {
+                    _cursor = cursor;
+                    _hover = hover;
+                  });
+                }
+              },
+              onExit: (_) {
+                if (_hover != null) setState(() => _hover = null);
               },
               child: ColoredBox(
                 color: Color(pal.canvas),

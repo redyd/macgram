@@ -7,10 +7,14 @@ import 'model.dart';
 // The diagram is turned into plain shapes by a pure function; the canvas, the
 // PNG export and the SVG export all draw the same list.
 
-// ponytail: text width is estimated (monospace, 0.6em per char), not measured.
-// Boxes can be a bit wide with a proportional fallback font; measure with
-// TextPainter if pixel-exact boxes ever matter.
-const fontSize = 13.0, charW = 7.9, rowH = 20.0, headH = 28.0, padX = 12.0;
+// Text is not measured: the bundled diagram font is monospace, every character
+// advances 0.6 em.
+const monoFont = 'JetBrains Mono';
+const fontSize = 13.0, charW = fontSize * 0.6;
+const rowH = 20.0, headH = 28.0, padX = 12.0;
+
+/// Outline widths: resting, and selected or pending.
+const thin = 1.2, thick = 2.0;
 
 /// Diagram colours (ARGB). Exports always use [light].
 class Palette {
@@ -72,14 +76,15 @@ class Box extends Shape {
     this.radius = 0,
     required this.fill,
     required this.stroke,
-    this.strokeWidth = 1.2,
+    this.strokeWidth = thin,
   });
 }
 
 class Line extends Shape {
   final Offset a, b;
   final int color;
-  const Line(this.a, this.b, this.color);
+  final double width;
+  const Line(this.a, this.b, this.color, [this.width = thin]);
 }
 
 class Poly extends Shape {
@@ -204,6 +209,9 @@ Scene buildScene(
   bool uml = false,
   String? selected,
   String? pending,
+
+  /// Box under the pointer, outlined in the selection colour.
+  String? hover,
   Palette pal = Palette.light,
 
   /// Editing handles (break points, note resize grip); off for exports.
@@ -216,8 +224,9 @@ Scene buildScene(
   final s = Scene(pal);
   final rects = <String, Rect>{};
   final linkHits = <(String, Rect)>[];
-  int stroke(String id) =>
-      id == selected ? pal.sel : (id == pending ? pal.pend : pal.ink);
+  int stroke(String id) => id == selected || id == hover
+      ? pal.sel
+      : (id == pending ? pal.pend : pal.ink);
 
   // In UML a plain binary association is just a line between the two classes.
   bool direct(Association a) =>
@@ -339,6 +348,7 @@ Scene buildScene(
           radius: 4.5,
           fill: pal.entity,
           stroke: color,
+          strokeWidth: 1.5,
         ),
       );
       linkHits.add(('bend|$key|$j', Rect.fromCircle(center: b, radius: 8)));
@@ -452,7 +462,7 @@ Scene buildScene(
         radius: radius,
         fill: fill,
         stroke: stroke(id),
-        strokeWidth: hot ? 2.5 : 1.2,
+        strokeWidth: hot ? thick : thin,
       ),
     );
     s.hits.add((id, r));
@@ -471,7 +481,7 @@ Scene buildScene(
           Line(
             Offset(r.left, r.top + headH),
             Offset(r.right, r.top + headH),
-            pal.ink,
+            pal.grey,
           ),
         );
       }
@@ -544,7 +554,7 @@ String toSvg(Scene s) {
   String n(double v) => v.toStringAsFixed(1);
   final out = StringBuffer(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="${n(b.left)} ${n(b.top)} ${n(b.width)} ${n(b.height)}" '
-    'width="${n(b.width)}" height="${n(b.height)}" font-family="monospace" font-size="$fontSize">\n'
+    'width="${n(b.width)}" height="${n(b.height)}" font-family="$monoFont, monospace" font-size="$fontSize" stroke-linecap="round">\n'
     '<rect x="${n(b.left)}" y="${n(b.top)}" width="${n(b.width)}" height="${n(b.height)}" fill="${c(s.pal.canvas)}"/>\n',
   );
   for (final shape in s.shapes) {
@@ -558,8 +568,8 @@ String toSvg(Scene s) {
       ) =>
         '<rect x="${n(rect.left)}" y="${n(rect.top)}" width="${n(rect.width)}" height="${n(rect.height)}" '
             'rx="${n(radius)}" fill="${c(fill)}" stroke="${c(stroke)}" stroke-width="$strokeWidth"/>',
-      Line(:final a, :final b, :final color) =>
-        '<line x1="${n(a.dx)}" y1="${n(a.dy)}" x2="${n(b.dx)}" y2="${n(b.dy)}" stroke="${c(color)}" stroke-width="1.2"/>',
+      Line(:final a, :final b, :final color, :final width) =>
+        '<line x1="${n(a.dx)}" y1="${n(a.dy)}" x2="${n(b.dx)}" y2="${n(b.dy)}" stroke="${c(color)}" stroke-width="$width"/>',
       Poly(:final points, :final fill) =>
         '<polygon points="${points.map((p) => '${n(p.dx)},${n(p.dy)}').join(' ')}" fill="${c(fill)}"/>',
       Label(

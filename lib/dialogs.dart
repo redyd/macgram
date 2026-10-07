@@ -26,7 +26,7 @@ const _help = '''
 
 • Attributs : Entrée ajoute une ligne, Tab passe du nom au type,
   Retour arrière sur un nom vide supprime la ligne, a|b|c dans le type crée un enum.
-• Réarranger (baguette) : replace les boîtes pour limiter les croisements ; Ctrl+Z pour revenir.
+• Réarranger : replace les boîtes pour limiter les croisements ; Ctrl+Z pour revenir.
 • Navigation : glisser au clic droit, molette (vertical), Maj+molette (horizontal),
   Ctrl+molette (zoom). Suppr : supprimer la sélection.''';
 
@@ -35,13 +35,17 @@ const _gap = SizedBox(height: 12);
 
 Future<void> showHelp(BuildContext context) => showDialog<void>(
   context: context,
-  builder: (_) => const AlertDialog(title: Text('Aide'), content: Text(_help)),
+  builder: (_) => const AlertDialog(
+    title: Text('Aide'),
+    content: SelectableText(_help, style: TextStyle(height: 1.5)),
+  ),
 );
 
 Future<void> _popup(
   BuildContext context,
   Controller c,
   List<Widget> Function(BuildContext) body, {
+  required String title,
   double width = 640,
 }) => showDialog<void>(
   context: context,
@@ -55,7 +59,28 @@ Future<void> _popup(
           builder: (ctx, _) => Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: body(ctx),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(ctx).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  _noTab(
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Fermer (Échap)',
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                ],
+              ),
+              _gap,
+              ...body(ctx),
+            ],
           ),
         ),
       ),
@@ -86,6 +111,13 @@ Future<void> showItemDialog(
   await _popup(
     context,
     c,
+    title: switch (item) {
+      Entity _ => 'Modifier l\'entité',
+      Association _ => 'Modifier l\'association',
+      EnumType _ => 'Modifier l\'enum',
+      Note _ => 'Modifier la note',
+      Arrow _ => 'Modifier la flèche',
+    },
     (ctx) => [
       ...switch (item) {
         Entity e => [
@@ -113,7 +145,7 @@ Future<void> showItemDialog(
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: const Icon(Icons.close),
                   tooltip: 'Retirer la patte',
                   onPressed: () => c.change(() => a.legs.remove(l)),
                 ),
@@ -209,9 +241,8 @@ Future<void> showLegDialog(
     context,
     c,
     width: 420,
+    title: '$entity — ${a.name}',
     (ctx) => [
-      Text('$entity — ${a.name}', style: Theme.of(ctx).textTheme.titleMedium),
-      _gap,
       _cards(c, l),
       CheckboxListTile(
         dense: true,
@@ -477,11 +508,14 @@ class _AttrRowState extends State<_AttrRow> {
         children: [
           ReorderableDragStartListener(
             index: widget.index,
-            child: const MouseRegion(
+            child: MouseRegion(
               cursor: SystemMouseCursors.grab,
               child: SizedBox(
                 width: 28,
-                child: Icon(Icons.drag_indicator, size: 18, color: Colors.grey),
+                child: Icon(
+                  Icons.drag_indicator,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ),
@@ -536,7 +570,9 @@ class _AttrRowState extends State<_AttrRow> {
               optionsViewBuilder: (ctx, onSelected, options) => Align(
                 alignment: Alignment.topLeft,
                 child: Material(
-                  elevation: 4,
+                  elevation: 8,
+                  clipBehavior: Clip.antiAlias,
+                  shape: Theme.of(ctx).popupMenuTheme.shape,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       maxHeight: 220,
@@ -574,7 +610,7 @@ class _AttrRowState extends State<_AttrRow> {
             width: 32,
             child: _noTab(
               IconButton(
-                icon: const Icon(Icons.close, size: 18),
+                icon: const Icon(Icons.close),
                 tooltip: 'Supprimer l\'attribut',
                 padding: EdgeInsets.zero,
                 onPressed: widget.onRemove,
